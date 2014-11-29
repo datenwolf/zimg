@@ -14,8 +14,7 @@ namespace zimg {;
 enum class PixelType;
 enum class CPUClass;
 
-template <class T>
-class ImagePlane;
+struct ImageTile;
 
 namespace colorspace {;
 
@@ -30,8 +29,9 @@ class ColorspaceConversion {
 	std::shared_ptr<PixelAdapter> m_pixel_adapter;
 	std::vector<std::shared_ptr<Operation>> m_operations;
 
-	void load_line(const void *src, float *dst, int width, PixelType type) const;
-	void store_line(const float *src, void *dst, int width, PixelType type) const;
+	void load_tile(const ImageTile &src, float *dst) const;
+
+	void store_tile(float *src, const ImageTile &dst) const;
 public:
 	/**
 	 * Initialize a null context. Cannot be used for execution.
@@ -50,22 +50,30 @@ public:
 	ColorspaceConversion(const ColorspaceDefinition &in, const ColorspaceDefinition &out, CPUClass cpu);
 
 	/**
-	 * Get the size of the temporary buffer required by the conversion.
+	 * Check if conversion supports the given pixel type.
 	 *
-	 * @param width width of image line.
-	 * @return the size of the temporary buffer in units of floats
+	 * @param type pixel type
+	 * @return true if supported, else false
 	 */
-	size_t tmp_size(int width) const;
+	bool pixel_supported(PixelType type) const;
 
 	/**
-	 * Process an image. The input and output pixel formats must match.
+	 * Get the size of the temporary buffer required by the conversion.
+	 *
+	 * @param width width of image tile
+	 * @param height height of image tile
+	 * @return the size of the temporary buffer in units of floats
+	 */
+	size_t tmp_size(int width, int height) const;
+
+	/**
+	 * Process a tile. The input and output pixel formats must match.
 	 *
 	 * @param src pointer to three input planes
 	 * @param dst pointer to three output planes
 	 * @param tmp temporary buffer (@see ColorspaceConversion::tmp_size)
-	 * @throws ZimgUnsupportedError if pixel type not supported
 	 */
-	void process(const ImagePlane<const void> *src, const ImagePlane<void> *dst, void *tmp) const;
+	void process_tile(const ImageTile src[3], const ImageTile dst[3], void *tmp) const;
 };
 
 } // namespace colorspace

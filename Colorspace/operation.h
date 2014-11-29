@@ -4,10 +4,13 @@
 #define ZIMG_COLORSPACE_OPERATION_H_
 
 #include <cstdint>
+#include "Common/osdep.h"
 
 namespace zimg {;
 
 enum class CPUClass;
+
+struct ImageTile;
 
 namespace colorspace {;
 
@@ -28,18 +31,17 @@ public:
 	/**
 	 * Convert from half precision to full precision.
 	 *
-	 * @param src input samples
-	 * @param dst output samples
-	 * @param width number of samples
+	 * @param src input tile
+	 * @param dst output tile
 	 */
-	virtual void f16_to_f32(const uint16_t *src, float *dst, int width) const = 0;
+	virtual void f16_to_f32(const ImageTile &src, const ImageTile &dst) const = 0;
 
 	/**
 	 * Convert from single precision to half precision.
 	 *
 	 * @see PixelAdapter::f16_to_f32
 	 */
-	virtual void f16_from_f32(const float *src, uint16_t *dst, int width) const = 0;
+	virtual void f32_to_f16(const ImageTile &src, const ImageTile &dst) const = 0;
 };
 
 /**
@@ -58,7 +60,7 @@ public:
 	 * @param ptr pointer to three image scanline pointers
 	 * @param width number of samples
 	 */
-	virtual void process(float * const *ptr, int width) const = 0;
+	virtual void process(float * const ptr[3], int width) const = 0;
 };
 
 /**

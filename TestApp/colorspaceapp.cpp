@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -8,7 +9,7 @@
 #include <string>
 #include "Common/cpuinfo.h"
 #include "Common/pixel.h"
-#include "Common/plane.h"
+#include "Common/tile.h"
 #include "Colorspace/colorspace.h"
 #include "Colorspace/colorspace_param.h"
 #include "apps.h"
@@ -140,25 +141,50 @@ void execute(const colorspace::ColorspaceConversion &conv, const Frame &in, Fram
 {
 	int width = in.width();
 	int height = in.height();
+	int pxsize = pixel_size(type);
 
 	Frame in_conv{ width, height, pixel_size(type), 3 };
 	Frame out_conv{ width, height, pixel_size(type), 3 };
 
-	ImagePlane<const void> in_planes[3];
-	ImagePlane<void> out_planes[3];
+	int in_byte_stride = in_conv.stride() * in_conv.pxsize();
+	int out_byte_stride = out_conv.stride() * out_conv.pxsize();
+
+	auto tmp = allocate_buffer(conv.tmp_size(64, 64), PixelType::FLOAT);
 
 	convert_frame(in, in_conv, filetype, type, fullrange_in, yuv_in);
 
-	for (int p = 0; p < 3; ++p) {
-		in_planes[p] = ImagePlane<const void>{ in_conv.data(p), width, height, in_conv.stride(), type };
-		out_planes[p] = ImagePlane<void>{ out_conv.data(p), width, height, out_conv.stride(), type };
-	}
-
-	auto tmp = allocate_buffer(conv.tmp_size(in.width()), PixelType::FLOAT);
-
 	measure_time(times, [&]()
 	{
-		conv.process(in_planes, out_planes, tmp.data());
+		ImageTile in_tiles[3] = { 0 };
+		ImageTile out_tiles[3] = { 0 };
+
+		for (int p = 0; p < 3; ++p) {
+			in_tiles[p].byte_stride = in_byte_stride;
+			out_tiles[p].byte_stride = out_byte_stride;
+
+			in_tiles[p].format = default_pixel_format(type);
+			out_tiles[p].format = default_pixel_format(type);
+		}
+
+		for (int i = 0; i < height; i += 64) {
+			for (int j = 0; j < width; j += 64) {
+				int tile_h = std::min(height - i, 64);
+				int tile_w = std::min(width - j, 64);
+
+				for (int p = 0; p < 3; ++p) {
+					in_tiles[p].ptr = (char *)in_conv.data(p) + i * in_byte_stride + j * pxsize;
+					out_tiles[p].ptr = (char *)out_conv.data(p) + i * out_byte_stride + j * pxsize;
+
+					in_tiles[p].width = tile_w;
+					in_tiles[p].height = tile_h;
+
+					out_tiles[p].width = tile_w;
+					out_tiles[p].height = tile_h;
+				}
+
+				conv.process_tile(in_tiles, out_tiles, tmp.data());
+			}
+		}
 	});
 
 	convert_frame(out_conv, out, type, filetype, fullrange_out, yuv_out);

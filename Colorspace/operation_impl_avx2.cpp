@@ -3,6 +3,7 @@
 #include <immintrin.h>
 #include "Common/align.h"
 #include "Common/osdep.h"
+#include "Common/tile.h"
 #include "matrix3.h"
 #include "operation.h"
 #include "operation_impl.h"
@@ -29,27 +30,51 @@ inline FORCE_INLINE float half_to_float(uint16_t x)
 
 class PixelAdapterAVX2 : public PixelAdapter {
 public:
-	void f16_to_f32(const uint16_t *src, float *dst, int width) const override
+	void f16_to_f32(const ImageTile &src, const ImageTile &dst) const override
 	{
-		for (int i = 0; i < mod(width, 8); i += 8) {
-			__m128i f16 = _mm_load_si128((const __m128i *)&src[i]);
-			__m256 f32 = _mm256_cvtph_ps(f16);
-			_mm256_store_ps(&dst[i], f32);
-		}
-		for (int i = mod(width, 8); i < width; ++i) {
-			dst[i] = half_to_float(src[i]);
+		TileView<const uint16_t> src_view{ src };
+		TileView<float> dst_view{ dst };
+
+		for (int i = 0; i < src.height; ++i) {
+			const uint16_t *src_ptr = src_view[i];
+			float *dst_ptr = dst_view[i];
+
+			for (int j = 0; j < mod(src.width, 8); j += 8) {
+				__m128i f16;
+				__m256 f32;
+
+				f16 = _mm_load_si128((const __m128i *)&src_ptr[j]);
+				f32 = _mm256_cvtph_ps(f16);
+
+				_mm256_store_ps(&dst_ptr[j], f32);
+			}
+			for (int j = mod(src.width, 8); j < src.width; ++j) {
+				dst_ptr[j] = half_to_float(src_ptr[j]);
+			}
 		}
 	}
 
-	void f16_from_f32(const float *src, uint16_t *dst, int width) const override
+	void f32_to_f16(const ImageTile &src, const ImageTile &dst) const override
 	{
-		for (int i = 0; i < mod(width, 8); i += 8) {
-			__m256 f32 = _mm256_load_ps(&src[i]);
-			__m128i f16 = _mm256_cvtps_ph(f32, 0);
-			_mm_store_si128((__m128i *)&dst[i], f16);
-		}
-		for (int i = mod(width, 8); i < width; ++i) {
-			dst[i] = float_to_half(src[i]);
+		TileView<const float> src_view{ src };
+		TileView<uint16_t> dst_view{ dst };
+
+		for (int i = 0; i < src.height; ++i) {
+			const float *src_ptr = src_view[i];
+			uint16_t *dst_ptr = dst_view[i];
+
+			for (int j = 0; j < mod(src.width, 8); j += 8) {
+				__m128i f16;
+				__m256 f32;
+
+				f32 = _mm256_load_ps(&src_ptr[j]);
+				f16 = _mm256_cvtps_ph(f32, 0);
+
+				_mm_store_si128((__m128i *)&dst_ptr[j], f16);
+			}
+			for (int j = mod(src.width, 8); j < src.width; ++j) {
+				dst_ptr[j] = float_to_half(src_ptr[j]);
+			}
 		}
 	}
 };

@@ -13,25 +13,12 @@ namespace colorspace {;
 
 namespace {;
 
-class PixelAdapterC : public PixelAdapter {
-public:
-	void f16_to_f32(const uint16_t *src, float *dst, int width) const override
-	{
-		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
-	}
-
-	void f16_from_f32(const float *src, uint16_t *dst, int width) const override
-	{
-		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
-	}
-};
-
 class MatrixOperationC : public MatrixOperationImpl {
 public:
 	explicit MatrixOperationC(const Matrix3x3 &m) : MatrixOperationImpl(m)
 	{}
 
-	void process(float * const *ptr, int width) const override
+	void process(float * const ptr[3], int width) const override
 	{
 		for (int i = 0; i < width; ++i) {
 			float a, b, c;
@@ -54,7 +41,7 @@ public:
 
 class Rec709GammaOperationC : public Operation {
 public:
-	void process(float * const *ptr, int width) const override
+	void process(float * const ptr[3], int width) const override
 	{
 		for (int p = 0; p < 3; ++p) {
 			for (int i = 0; i < width; ++i) {
@@ -68,7 +55,7 @@ public:
 
 class Rec709InverseGammaOperationC : public Operation {
 public:
-	void process(float * const *ptr, int width) const override
+	void process(float * const ptr[3], int width) const override
 	{
 		for (int p = 0; p < 3; ++p) {
 			for (int i = 0; i < width; ++i) {
@@ -82,7 +69,7 @@ public:
 
 class Rec2020CLToRGBOperationC : public Operation {
 public:
-	void process(float * const *ptr, int width) const override
+	void process(float * const ptr[3], int width) const override
 	{
 		float kr = (float)REC_2020_KR;
 		float kb = (float)REC_2020_KB;
@@ -126,7 +113,7 @@ public:
 
 class Rec2020CLToYUVOperationC : public Operation {
 public:
-	void process(float * const *ptr, int width) const override
+	void process(float * const ptr[3], int width) const override
 	{
 		float kr = (float)REC_2020_KR;
 		float kb = (float)REC_2020_KB;
@@ -183,9 +170,6 @@ PixelAdapter *create_pixel_adapter(CPUClass cpu)
 #ifdef ZIMG_X86
 	ret = create_pixel_adapter_x86(cpu);
 #endif
-	if (!ret)
-		ret = new PixelAdapterC{};
-
 	return ret;
 }
 

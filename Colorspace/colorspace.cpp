@@ -5,7 +5,7 @@
 #include "Common/align.h"
 #include "Common/except.h"
 #include "Common/pixel.h"
-#include "Common/plane.h"
+#include "Common/tile.h"
 #include "colorspace.h"
 #include "colorspace_param.h"
 #include "graph.h"
@@ -37,64 +37,57 @@ try :
 	throw ZimgOutOfMemory{};
 }
 
-void ColorspaceConversion::load_line(const void *src, float *dst, int width, PixelType type) const
+void ColorspaceConversion::load_tile(const ImageTile &src, float *dst) const
 {
-	switch (type) {
-	case PixelType::HALF:
-		m_pixel_adapter->f16_to_f32((const uint16_t *)src, dst, width);
-		break;
-	case PixelType::FLOAT:
-		std::copy_n((const float *)src, width, dst);
-		break;
-	default:
-		throw ZimgUnsupportedError{ "unsupported pixel type" };
-	}
+	ImageTile dst_tile{ dst, align(src.width * (int)sizeof(float), ALIGNMENT), src.width, src.height, default_pixel_format(PixelType::FLOAT)};
+
+	if (src.format.type == PixelType::HALF)
+		m_pixel_adapter->f16_to_f32(src, dst_tile);
+	else if (src.format.type == PixelType::FLOAT)
+		copy_image_tile(src, dst_tile);
 }
 
-void ColorspaceConversion::store_line(const float *src, void *dst, int width, PixelType type) const
+void ColorspaceConversion::store_tile(float *src, const ImageTile &dst) const
 {
-	switch (type) {
-	case PixelType::HALF:
-		m_pixel_adapter->f16_from_f32(src, (uint16_t *)dst, width);
-		break;
-	case PixelType::FLOAT:
-		std::copy_n(src, width, (float *)dst);
-		break;
-	default:
-		throw ZimgUnsupportedError{ "unsupported pixel type" };
-	}
+	ImageTile src_tile{ src, align(dst.width * (int)sizeof(float), ALIGNMENT), dst.width, dst.height, default_pixel_format(PixelType::FLOAT)};
+
+	if (dst.format.type == PixelType::HALF)
+		m_pixel_adapter->f32_to_f16(src_tile, dst);
+	else if (dst.format.type == PixelType::FLOAT)
+		copy_image_tile(src_tile, dst);
 }
 
-size_t ColorspaceConversion::tmp_size(int width) const
+bool ColorspaceConversion::pixel_supported(PixelType type) const
 {
-	return 3 * align((size_t)width, AlignmentOf<float>::value);
+	return (m_pixel_adapter && type == PixelType::HALF) || type == PixelType::FLOAT;
 }
 
-void ColorspaceConversion::process(const ImagePlane<const void> *src, const ImagePlane<void> *dst, void *tmp) const
+size_t ColorspaceConversion::tmp_size(int width, int height) const
 {
-	PixelType src_type = src[0].format().type;
-	PixelType dst_type = dst[0].format().type;
+	size_t stride = align(width, AlignmentOf<float>::value);
+	return 3 * stride * height;
+}
 
-	int width = src[0].width();
-	int height = src[0].height();
+void ColorspaceConversion::process_tile(const ImageTile src[3], const ImageTile dst[3], void *tmp) const
+{
+	int tmp_tile_size = align(src[0].width, AlignmentOf<float>::value) * src[0].height;
+	float *tmp_ptr[3];
 
-	ptrdiff_t tmp_stride = align(width, AlignmentOf<float>::value);
-	float *tmp_f = (float *)tmp;
-	float *buf[3] = { tmp_f, tmp_f + tmp_stride, tmp_f + 2 * tmp_stride };
+	tmp_ptr[0] = (float *)tmp + 0 * tmp_tile_size;
+	tmp_ptr[1] = (float *)tmp + 1 * tmp_tile_size;
+	tmp_ptr[2] = (float *)tmp + 2 * tmp_tile_size;
 
-	for (int i = 0; i < height; ++i) {
-		load_line(src[0][i], buf[0], width, src_type);
-		load_line(src[1][i], buf[1], width, src_type);
-		load_line(src[2][i], buf[2], width, src_type);
+	load_tile(src[0], tmp_ptr[0]);
+	load_tile(src[1], tmp_ptr[1]);
+	load_tile(src[2], tmp_ptr[2]);
 
-		for (auto &o : m_operations) {
-			o->process(buf, width);
-		}
-
-		store_line(buf[0], dst[0][i], width, dst_type);
-		store_line(buf[1], dst[1][i], width, dst_type);
-		store_line(buf[2], dst[2][i], width, dst_type);
+	for (const auto &op : m_operations) {
+		op->process(tmp_ptr, tmp_tile_size);
 	}
+
+	store_tile(tmp_ptr[0], dst[0]);
+	store_tile(tmp_ptr[1], dst[1]);
+	store_tile(tmp_ptr[2], dst[2]);
 }
 
 } // namespace colorspace

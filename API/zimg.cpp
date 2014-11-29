@@ -7,6 +7,7 @@
 #include "Common/osdep.h"
 #include "Common/pixel.h"
 #include "Common/plane.h"
+#include "Common/tile.h"
 #include "Colorspace/colorspace.h"
 #include "Colorspace/colorspace_param.h"
 #include "Depth/depth.h"
@@ -256,9 +257,9 @@ zimg_colorspace_context *zimg_colorspace_create(int matrix_in, int transfer_in, 
 	return ret;
 }
 
-size_t zimg_colorspace_tmp_size(zimg_colorspace_context *ctx, int width)
+size_t zimg_colorspace_tmp_size(zimg_colorspace_context *ctx, int)
 {
-	return ctx->p.tmp_size(width) * pixel_size(PixelType::FLOAT);
+	return ctx->p.tmp_size(64, 64) * pixel_size(PixelType::FLOAT);
 }
 
 int zimg_colorspace_process(zimg_colorspace_context *ctx, const void * const src[3], void * const dst[3], void *tmp,
@@ -270,15 +271,39 @@ int zimg_colorspace_process(zimg_colorspace_context *ctx, const void * const src
 		PixelType type = get_pixel_type(pixel_type);
 		int pxsize = pixel_size(type);
 
-		ImagePlane<const void> src_planes[3];
-		ImagePlane<void> dst_planes[3];
+		ImageTile src_tiles[3] = { 0 };
+		ImageTile dst_tiles[3] = { 0 };
+
+		if (!ctx->p.pixel_supported(type))
+			throw ZimgUnsupportedError{ "unsupported pixel format" };
 
 		for (int p = 0; p < 3; ++p) {
-			src_planes[p] = ImagePlane<const void>{ src[p], width, height, src_stride[p] / pxsize, type };
-			dst_planes[p] = ImagePlane<void>{ dst[p], width, height, dst_stride[p] / pxsize, type };
+			src_tiles[p].byte_stride = src_stride[p];
+			dst_tiles[p].byte_stride = dst_stride[p];
+
+			src_tiles[p].format = default_pixel_format(type);
+			dst_tiles[p].format = default_pixel_format(type);
 		}
 
-		ctx->p.process(src_planes, dst_planes, tmp);
+		for (int i = 0; i < height; i += 64) {
+			for (int j = 0; j < width; j += 64) {
+				int tile_h = std::min(height - i, 64);
+				int tile_w = std::min(width - j, 64);
+
+				for (int p = 0; p < 3; ++p) {
+					src_tiles[p].ptr = (char *)src[p] + i * dst_stride[p] + j * pxsize;
+					dst_tiles[p].ptr = (char *)dst[p] + i * dst_stride[p] + j * pxsize;
+
+					src_tiles[p].width = tile_w;
+					src_tiles[p].height = tile_h;
+
+					dst_tiles[p].width = tile_w;
+					dst_tiles[p].height = tile_h;
+				}
+
+				ctx->p.process_tile(src_tiles, dst_tiles, tmp);
+			}
+		}
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}
