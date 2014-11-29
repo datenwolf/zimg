@@ -121,7 +121,6 @@
     <ClInclude Include="matrix.h" />
     <ClInclude Include="osdep.h" />
     <ClInclude Include="pixel.h" />
-    <ClInclude Include="plane.h" />
     <ClInclude Include="tile.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
