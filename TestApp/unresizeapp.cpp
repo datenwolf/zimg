@@ -4,7 +4,7 @@
 #include <string>
 #include "Common/cpuinfo.h"
 #include "Common/pixel.h"
-#include "Common/plane.h"
+#include "Common/tile.h"
 #include "Unresize/unresize.h"
 #include "apps.h"
 #include "frame.h"
@@ -62,10 +62,10 @@ void execute(const unresize::Unresize &unresize, const Frame &in, Frame &out, in
 	measure_time(times, [&]()
 	{
 		for (int p = 0; p < src.planes(); ++p) {
-			ImagePlane<const void> src_p{ src.data(p), src.width(), src.height(), src.stride(), type };
-			ImagePlane<void> dst_p{ dst.data(p), dst.width(), dst.height(), dst.stride(), type };
+			ImageTile src_tile{ src.data(p), src.stride() * pxsize, src.width(), src.height(), default_pixel_format(type) };
+			ImageTile dst_tile{ dst.data(p), dst.stride() * pxsize, dst.width(), dst.height(), default_pixel_format(type) };
 
-			unresize.process(src_p, dst_p, tmp.data());
+			unresize.process(src_tile, dst_tile, tmp.data());
 		}
 	});
 

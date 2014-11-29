@@ -4,25 +4,23 @@
 #define ZIMG_RESIZE_RESIZE_IMPL_H_
 
 #include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include "Common/osdep.h"
-#include "Common/plane.h"
 #include "filter.h"
 
 namespace zimg {;
 
 enum class CPUClass;
 
-template <class T>
-class ImagePlane;
+struct ImageTile;
 
 namespace resize {;
 
 struct ScalarPolicy_U16 {
+	typedef uint16_t data_type;
 	typedef int32_t num_type;
 
-	FORCE_INLINE int32_t coeff(const EvaluatedFilter &filter, ptrdiff_t row, ptrdiff_t k)
+	FORCE_INLINE int32_t coeff(const EvaluatedFilter &filter, int row, int k)
 	{
 		return filter.data_i16()[row * filter.stride_i16() + k];
 	}
@@ -46,9 +44,10 @@ struct ScalarPolicy_U16 {
 };
 
 struct ScalarPolicy_F32 {
+	typedef float data_type;
 	typedef float num_type;
 
-	FORCE_INLINE float coeff(const EvaluatedFilter &filter, ptrdiff_t row, ptrdiff_t k)
+	FORCE_INLINE float coeff(const EvaluatedFilter &filter, int row, int k)
 	{
 		return filter.data()[row * filter.stride() + k];
 	}
@@ -58,44 +57,50 @@ struct ScalarPolicy_F32 {
 	FORCE_INLINE void store(float *dst, float x) { *dst = x; }
 };
 
-template <class T, class Policy>
-inline FORCE_INLINE void filter_plane_h_scalar(const EvaluatedFilter &filter, const ImagePlane<const T> &src, const ImagePlane<T> &dst,
-                                               ptrdiff_t i_begin, ptrdiff_t i_end, ptrdiff_t j_begin, ptrdiff_t j_end, Policy policy)
+template <class Policy>
+inline FORCE_INLINE void filter_plane_h_scalar(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst,
+											   int i_begin, int i_end, int j_begin, int j_end, Policy policy)
 {
-	for (ptrdiff_t i = i_begin; i < i_end; ++i) {
-		for (ptrdiff_t j = j_begin; j < j_end; ++j) {
-			ptrdiff_t left = filter.left()[j];
+	TileView<const typename Policy::data_type> src_view{ src };
+	TileView<typename Policy::data_type> dst_view{ dst };
+
+	for (int i = i_begin; i < i_end; ++i) {
+		for (int j = j_begin; j < j_end; ++j) {
+			int left = filter.left()[j];
 			typename Policy::num_type accum = 0;
 
 			for (int k = 0; k < filter.width(); ++k) {
 				typename Policy::num_type coeff = policy.coeff(filter, j, k);
-				typename Policy::num_type x = policy.load(&src[i][left + k]);
+				typename Policy::num_type x = policy.load(&src_view[i][left + k]);
 
 				accum += coeff * x;
 			}
 
-			policy.store(&dst[i][j], accum);
+			policy.store(&dst_view[i][j], accum);
 		}
 	}
 }
 
-template <class T, class Policy>
-inline FORCE_INLINE void filter_plane_v_scalar(const EvaluatedFilter &filter, const ImagePlane<const T> &src, const ImagePlane<T> &dst,
-                                               ptrdiff_t i_begin, ptrdiff_t i_end, ptrdiff_t j_begin, ptrdiff_t j_end, Policy policy)
+template <class Policy>
+inline FORCE_INLINE void filter_plane_v_scalar(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst,
+											   int i_begin, int i_end, int j_begin, int j_end, Policy policy)
 {
-	for (ptrdiff_t i = i_begin; i < i_end; ++i) {
-		for (ptrdiff_t j = j_begin; j < j_end; ++j) {
-			ptrdiff_t top = filter.left()[i];
+	TileView<const typename Policy::data_type> src_view{ src };
+	TileView<typename Policy::data_type> dst_view{ dst };
+
+	for (int i = i_begin; i < i_end; ++i) {
+		for (int j = j_begin; j < j_end; ++j) {
+			int top = filter.left()[i];
 			typename Policy::num_type accum = 0;
 
-			for (ptrdiff_t k = 0; k < filter.width(); ++k) {
+			for (int k = 0; k < filter.width(); ++k) {
 				typename Policy::num_type coeff = policy.coeff(filter, i, k);
-				typename Policy::num_type x = policy.load(&src[top + k][j]);
+				typename Policy::num_type x = policy.load(&src_view[top + k][j]);
 
 				accum += coeff * x;
 			}
 
-			policy.store(&dst[i][j], accum);
+			policy.store(&dst_view[i][j], accum);
 		}
 	}
 }
@@ -136,42 +141,42 @@ public:
 	 * @param tmp temporary buffer (implementation defined size)
 	 * @throws ZimgUnsupportedError if not supported
 	 */
-	virtual void process_u16_h(const ImagePlane<const uint16_t> &src, const ImagePlane<uint16_t> &dst, uint16_t *tmp) const = 0;
+	virtual void process_u16_h(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 
 	/**
 	 * Execute vertical filter pass on an unsigned 16-bit image.
 	 *
 	 * @see ResizeImpl::procss_u16_h
 	 */
-	virtual void process_u16_v(const ImagePlane<const uint16_t> &src, const ImagePlane<uint16_t> &dst, uint16_t *tmp) const = 0;
+	virtual void process_u16_v(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 
 	/**
 	 * Execute horizontal filter pass on a half precision 16-bit image.
 	 *
 	 * @see ResizeImpl::process_u16_h
 	 */
-	virtual void process_f16_h(const ImagePlane<const uint16_t> &src, const ImagePlane<uint16_t> &dst, uint16_t *tmp) const = 0;
+	virtual void process_f16_h(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 
 	/**
 	 * Execute vertical filter pass on a half precision 16-bit image.
 	 *
 	 *  @see ResizeImpl::procss_u16_h
 	 */
-	virtual void process_f16_v(const ImagePlane<const uint16_t> &src, const ImagePlane<uint16_t> &dst, uint16_t *tmp) const = 0;
+	virtual void process_f16_v(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 
 	/**
 	 * Execute horizontal filter pass on a single precision 32-bit image.
 	 *
 	 * @see ResizeImpl::process_u16_h
 	 */
-	virtual void process_f32_h(const ImagePlane<const float> &src, const ImagePlane<float> &dst, float *tmp) const = 0;
+	virtual void process_f32_h(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 
 	/**
 	 * Execute vertical filter pass on a single precision 32-bit image.
 	 *
 	 * @see ResizeImpl::procss_u16_h
 	 */
-	virtual void process_f32_v(const ImagePlane<const float> &src, const ImagePlane<float> &dst, float *tmp) const = 0;
+	virtual void process_f32_v(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 };
 
 /**

@@ -116,8 +116,8 @@ public:
 class EvaluatedFilter {
 	int m_width;
 	int m_height;
-	ptrdiff_t m_stride;
-	ptrdiff_t m_stride_i16;
+	int m_stride;
+	int m_stride_i16;
 	AlignedVector<float> m_data;
 	AlignedVector<int16_t> m_data_i16;
 	AlignedVector<int> m_left;
@@ -148,12 +148,12 @@ public:
 	/**
 	 * @return distance betwen filter rows in floats
 	 */
-	ptrdiff_t stride() const;
+	int stride() const;
 
 	/**
 	 * @return distance between filter rows in 16-bit ints
 	 */
-	ptrdiff_t stride_i16() const;
+	int stride_i16() const;
 
 	/**
 	 * @return pointer to filter coefficients

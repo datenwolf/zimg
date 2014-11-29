@@ -11,8 +11,7 @@ namespace zimg {;
 enum class CPUClass;
 enum class PixelType;
 
-template <class T>
-class ImagePlane;
+struct ImageTile;
 
 namespace resize {;
 
@@ -35,9 +34,9 @@ class Resize {
 
 	size_t max_frame_size(PixelType type) const;
 
-	void invoke_impl_h(const ImagePlane<const void> &src, const ImagePlane<void> &dst, void *tmp) const;
+	void invoke_impl_h(const ImageTile &src, const ImageTile &dst, void *tmp) const;
 
-	void invoke_impl_v(const ImagePlane<const void> &src, const ImagePlane<void> &dst, void *tmp) const;
+	void invoke_impl_v(const ImageTile &src, const ImageTile &dst, void *tmp) const;
 public:
 	/**
 	 * Initialize a null context. Cannot be used for execution.
@@ -73,13 +72,14 @@ public:
 
 	/**
 	 * Process an image. The input and output pixel formats must match.
+	 * The tile must span an entire plane.
 	 *
-	 * @param src input plane
-	 * @param dst output plane
+	 * @param src input tile
+	 * @param dst output tile
 	 * @param tmp temporary buffer (@see Resize::tmp_size)
 	 * @throws ZimgUnsupportedError if pixel type not supported
 	 */
-	void process(const ImagePlane<const void> &src, const ImagePlane<void> &dst, void *tmp) const;
+	void process(const ImageTile &src, const ImageTile &dst, void *tmp) const;
 };
 
 } // namespace resize

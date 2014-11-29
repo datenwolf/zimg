@@ -4,7 +4,7 @@
 #include "Common/cpuinfo.h"
 #include "Common/except.h"
 #include "Common/pixel.h"
-#include "Common/plane.h"
+#include "Common/tile.h"
 #include "resize.h"
 #include "resize_impl.h"
 
@@ -53,47 +53,47 @@ size_t Resize::tmp_size(PixelType type) const
 	return size;
 }
 
-void Resize::invoke_impl_h(const ImagePlane<const void> &src, const ImagePlane<void> &dst, void *tmp) const
+void Resize::invoke_impl_h(const ImageTile &src, const ImageTile &dst, void *tmp) const
 {
-	switch (src.format().type) {
+	switch (src.format.type) {
 	case PixelType::WORD:
-		m_impl->process_u16_h(plane_cast<const uint16_t>(src), plane_cast<uint16_t>(dst), (uint16_t *)tmp);
+		m_impl->process_u16_h(src, dst, tmp);
 		break;
 	case PixelType::HALF:
-		m_impl->process_f16_h(plane_cast<const uint16_t>(src), plane_cast<uint16_t>(dst), (uint16_t *)tmp);
+		m_impl->process_f16_h(src, dst, tmp);
 		break;
 	case PixelType::FLOAT:
-		m_impl->process_f32_h(plane_cast<const float>(src), plane_cast<float>(dst), (float *)tmp);
+		m_impl->process_f32_h(src, dst, tmp);
 		break;
 	default:
 		throw ZimgUnsupportedError{ "only WORD, HALF, and FLOAT are supported for resize" };
 	}
 }
 
-void Resize::invoke_impl_v(const ImagePlane<const void> &src, const ImagePlane<void> &dst, void *tmp) const
+void Resize::invoke_impl_v(const ImageTile &src, const ImageTile &dst, void *tmp) const
 {
-	switch (src.format().type) {
+	switch (src.format.type) {
 	case PixelType::WORD:
-		m_impl->process_u16_v(plane_cast<const uint16_t>(src), plane_cast<uint16_t>(dst), (uint16_t *)tmp);
+		m_impl->process_u16_v(src, dst, tmp);
 		break;
 	case PixelType::HALF:
-		m_impl->process_f16_v(plane_cast<const uint16_t>(src), plane_cast<uint16_t>(dst), (uint16_t *)tmp);
+		m_impl->process_f16_v(src, dst, tmp);
 		break;
 	case PixelType::FLOAT:
-		m_impl->process_f32_v(plane_cast<const float>(src), plane_cast<float>(dst), (float *)tmp);
+		m_impl->process_f32_v(src, dst, tmp);
 		break;
 	default:
 		throw ZimgUnsupportedError{ "only WORD, HALF, and FLOAT are supported for resize" };
 	}
 }
 
-void Resize::process(const ImagePlane<const void> &src, const ImagePlane<void> &dst, void *tmp) const
+void Resize::process(const ImageTile &src, const ImageTile &dst, void *tmp) const
 {
-	PixelType type = src.format().type;
+	PixelType type = src.format.type;
 	int pxsize = pixel_size(type);
 
 	if (m_skip_h && m_skip_v) {
-		copy_image_plane(src, dst);
+		copy_image_tile(src, dst);
 	} else if (m_skip_h) {
 		invoke_impl_v(src, dst, tmp);
 	} else if (m_skip_v) {
@@ -111,14 +111,14 @@ void Resize::process(const ImagePlane<const void> &src, const ImagePlane<void> &
 		char *tmp2 = tmp1 + max_frame_size(type) * pixel_size(type);
 
 		if (h_first_cost < v_first_cost) {
-			int tmp_stride = align(m_dst_width, ALIGNMENT / pxsize);
-			ImagePlane<void> tmp_plane{ tmp1, m_dst_width, m_src_height, tmp_stride, type };
+			int tmp_byte_stride = align(m_dst_width, ALIGNMENT / pxsize) * pxsize;
+			ImageTile tmp_plane{ tmp1, tmp_byte_stride, m_dst_width, m_src_height, src.format };
 
 			invoke_impl_h(src, tmp_plane, tmp2);
 			invoke_impl_v(tmp_plane, dst, tmp2);
 		} else {
-			int tmp_stride = align(m_src_width, ALIGNMENT / pxsize);
-			ImagePlane<void> tmp_plane{ tmp1, m_src_width, m_dst_height, tmp_stride, type };
+			int tmp_byte_stride = align(m_src_width, ALIGNMENT / pxsize) * pxsize;
+			ImageTile tmp_plane{ tmp1, tmp_byte_stride, m_src_width, m_dst_height, src.format };
 
 			invoke_impl_v(src, tmp_plane, tmp2);
 			invoke_impl_h(tmp_plane, dst, tmp2);

@@ -3,41 +3,46 @@
 #ifndef ZIMG_UNRESIZE_UNRESIZE_IMPL_H_
 #define ZIMG_UNRESIZE_UNRESIZE_IMPL_H_
 
-#include <cstddef>
+#include <cstdint>
 #include "Common/osdep.h"
-#include "Common/plane.h"
 #include "bilinear.h"
 
 namespace zimg {;
 
 enum class CPUClass;
 
+struct ImageTile;
+
 namespace unresize {;
 
 struct ScalarPolicy_F32 {
+	typedef float data_type;
+
 	FORCE_INLINE float load(const float *src) { return *src; }
 
 	FORCE_INLINE void store(float *dst, float x) { *dst = x; }
 };
 
-template <class T, class Policy>
-inline FORCE_INLINE void filter_scanline_h_forward(const BilinearContext &ctx, const ImagePlane<const T> &src, T * RESTRICT tmp,
-                                                   ptrdiff_t i, ptrdiff_t j_begin, ptrdiff_t j_end, Policy policy)
+template <class Policy>
+inline FORCE_INLINE void filter_scanline_h_forward(const BilinearContext &ctx, const ImageTile &src, typename Policy::data_type * RESTRICT tmp,
+												   int i, int j_begin, int j_end, Policy policy)
 {
+	TileView<const typename Policy::data_type> src_view{ src };
+
 	const float *c = ctx.lu_c.data();
 	const float *l = ctx.lu_l.data();
 
-	float z = j_begin ? policy.load(&src[i][j_begin - 1]) : 0;
+	float z = j_begin ? policy.load(&src_view[i][j_begin - 1]) : 0;
 
 	// Matrix-vector product, and forward substitution loop.
-	for (ptrdiff_t j = j_begin; j < j_end; ++j) {
+	for (int j = j_begin; j < j_end; ++j) {
 		const float *row = ctx.matrix_coefficients.data() + j * ctx.matrix_row_stride;
-		ptrdiff_t left = ctx.matrix_row_offsets[j];
+		int left = ctx.matrix_row_offsets[j];
 
 		float accum = 0;
-		for (ptrdiff_t k = 0; k < ctx.matrix_row_size; ++k) {
+		for (int k = 0; k < ctx.matrix_row_size; ++k) {
 			float coeff = row[k];
-			float x = policy.load(&src[i][left + k]);
+			float x = policy.load(&src_view[i][left + k]);
 			accum += coeff * x;
 		}
 
@@ -46,55 +51,62 @@ inline FORCE_INLINE void filter_scanline_h_forward(const BilinearContext &ctx, c
 	}
 }
 
-template <class T, class Policy>
-inline FORCE_INLINE void filter_scanline_h_back(const BilinearContext &ctx, const T * RESTRICT tmp, const ImagePlane<T> &dst,
-                                                ptrdiff_t i, ptrdiff_t j_begin, ptrdiff_t j_end, Policy policy)
+template <class Policy>
+inline FORCE_INLINE void filter_scanline_h_back(const BilinearContext &ctx, const typename Policy::data_type * RESTRICT tmp, const ImageTile &dst,
+												int i, int j_begin, int j_end, Policy policy)
 {
+	TileView<typename Policy::data_type> dst_view{ dst };
+
 	const float *u = ctx.lu_u.data();
-	float w = j_begin < ctx.dst_width ? policy.load(&dst[i][j_begin]) : 0;
+	float w = j_begin < ctx.dst_width ? policy.load(&dst_view[i][j_begin]) : 0;
 
 	// Backward substitution.
-	for (ptrdiff_t j = j_begin; j > j_end; --j) {
+	for (int j = j_begin; j > j_end; --j) {
 		w = policy.load(&tmp[j - 1]) - u[j - 1] * w;
-		policy.store(&dst[i][j - 1], w);
+		policy.store(&dst_view[i][j - 1], w);
 	}
 }
 
-template <class T, class Policy>
-inline FORCE_INLINE void filter_scanline_v_forward(const BilinearContext &ctx, const ImagePlane<const T> &src, const ImagePlane<T> &dst,
-                                                   ptrdiff_t i, ptrdiff_t j_begin, ptrdiff_t j_end, Policy policy)
+template <class Policy>
+inline FORCE_INLINE void filter_scanline_v_forward(const BilinearContext &ctx, const ImageTile &src, const ImageTile &dst,
+												   int i, int j_begin, int j_end, Policy policy)
 {
+	TileView<const typename Policy::data_type> src_view{ src };
+	TileView<typename Policy::data_type> dst_view{ dst };
+
 	const float *c = ctx.lu_c.data();
 	const float *l = ctx.lu_l.data();
 
 	const float *row = ctx.matrix_coefficients.data() + i * ctx.matrix_row_stride;
-	ptrdiff_t top = ctx.matrix_row_offsets[i];
+	int top = ctx.matrix_row_offsets[i];
 
-	for (ptrdiff_t j = j_begin; j < j_end; ++j) {
-		float z = i ? policy.load(&dst[i - 1][j]) : 0;
+	for (int j = j_begin; j < j_end; ++j) {
+		float z = i ? policy.load(&dst_view[i - 1][j]) : 0;
 
 		float accum = 0;
-		for (ptrdiff_t k = 0; k < ctx.matrix_row_size; ++k) {
+		for (int k = 0; k < ctx.matrix_row_size; ++k) {
 			float coeff = row[k];
-			float x = policy.load(&src[top + k][j]);
+			float x = policy.load(&src_view[top + k][j]);
 			accum += coeff * x;
 		}
 
 		z = (accum - c[i] * z) * l[i];
-		policy.store(&dst[i][j], z);
+		policy.store(&dst_view[i][j], z);
 	}
 }
 
-template <class T, class Policy>
-inline FORCE_INLINE void filter_scanline_v_back(const BilinearContext &ctx, const ImagePlane<T> &dst, ptrdiff_t i, ptrdiff_t j_begin, ptrdiff_t j_end, Policy policy)
+template <class Policy>
+inline FORCE_INLINE void filter_scanline_v_back(const BilinearContext &ctx, const ImageTile &dst, int i, int j_begin, int j_end, Policy policy)
 {
+	TileView<typename Policy::data_type> dst_view{ dst };
+
 	const float *u = ctx.lu_u.data();
 
 	for (ptrdiff_t j = j_begin; j < j_end; ++j) {
-		float w = i < ctx.dst_width ? policy.load(&dst[i][j]) : 0;
+		float w = i < ctx.dst_width ? policy.load(&dst_view[i][j]) : 0;
 
-		w = policy.load(&dst[i - 1][j]) - u[i - 1] * w;
-		policy.store(&dst[i - 1][j], w);
+		w = policy.load(&dst_view[i - 1][j]) - u[i - 1] * w;
+		policy.store(&dst_view[i - 1][j], w);
 	}
 }
 
@@ -127,13 +139,13 @@ public:
 	 */
 	virtual ~UnresizeImpl() = 0;
 
-	virtual void process_f16_h(const ImagePlane<const uint16_t> &src, const ImagePlane<uint16_t> &dst, uint16_t *tmp) const = 0;
+	virtual void process_f16_h(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 
-	virtual void process_f16_v(const ImagePlane<const uint16_t> &src, const ImagePlane<uint16_t> &dst, uint16_t *tmp) const = 0;
+	virtual void process_f16_v(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 
-	virtual void process_f32_h(const ImagePlane<const float> &src, const ImagePlane<float> &dst, float *tmp) const = 0;
+	virtual void process_f32_h(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 
-	virtual void process_f32_v(const ImagePlane<const float> &src, const ImagePlane<float> &dst, float *tmp) const = 0;
+	virtual void process_f32_v(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 };
 
 /**

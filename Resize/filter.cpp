@@ -187,12 +187,12 @@ int EvaluatedFilter::height() const
 	return m_height;
 }
 
-ptrdiff_t EvaluatedFilter::stride() const
+int EvaluatedFilter::stride() const
 {
 	return m_stride;
 }
 
-ptrdiff_t EvaluatedFilter::stride_i16() const
+int EvaluatedFilter::stride_i16() const
 {
 	return m_stride_i16;
 }

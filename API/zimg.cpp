@@ -6,7 +6,6 @@
 #include "Common/except.h"
 #include "Common/osdep.h"
 #include "Common/pixel.h"
-#include "Common/plane.h"
 #include "Common/tile.h"
 #include "Colorspace/colorspace.h"
 #include "Colorspace/colorspace_param.h"
@@ -407,12 +406,11 @@ int zimg_resize_process(zimg_resize_context *ctx, const void *src, void *dst, vo
 
 	try {
 		PixelType type = get_pixel_type(pixel_type);
-		int pxsize = pixel_size(type);
 
-		ImagePlane<const void> src_plane{ src, src_width, src_height, src_stride / pxsize, type };
-		ImagePlane<void> dst_plane{ dst, dst_width, dst_height, dst_stride / pxsize, type };
+		ImageTile src_tile{ (void *)src, src_stride, src_width, src_height, default_pixel_format(type) };
+		ImageTile dst_tile{ (void *)dst, dst_stride, dst_width, dst_height, default_pixel_format(type) };
 
-		ctx->p.process(src_plane, dst_plane, tmp);
+		ctx->p.process(src_tile, dst_tile, tmp);
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}
