@@ -8,7 +8,8 @@
 namespace zimg {;
 
 enum class CPUClass;
-struct PixelFormat;
+
+struct ImageTile;
 
 namespace depth {;
 
@@ -25,33 +26,31 @@ public:
 	/**
 	 * Convert from byte to half precision.
 	 *
-	 * @param src input samples
-	 * @param dst output samples
-	 * @param width numer of samples
-	 * @param src_fmt source format
+	 * @param src input tile
+	 * @param dst output tile
 	 */
-	virtual void byte_to_half(const uint8_t *src, uint16_t *dst, int width, const PixelFormat &src_fmt) const = 0;
+	virtual void byte_to_half(const ImageTile &src, const ImageTile &dst) const = 0;
 
 	/**
 	 * Convert from byte to single precision.
 	 *
 	 * @see DepthConvert::byte_to_half
 	 */
-	virtual void byte_to_float(const uint8_t *src, float *dst, int width, const PixelFormat &src_fmt) const = 0;
+	virtual void byte_to_float(const ImageTile &src, const ImageTile &dst) const = 0;
 
 	/**
 	 * Convert from word to half precision.
 	 *
 	 * @see DepthConvert::byte_to_half
 	 */
-	virtual void word_to_half(const uint16_t *src, uint16_t *dst, int width, const PixelFormat &src_fmt) const = 0;
+	virtual void word_to_half(const ImageTile &src, const ImageTile &dst) const = 0;
 
 	/**
 	 * Convert from word to single precision.
 	 *
 	 * @see DepthConvert::byte_to_half
 	 */
-	virtual void word_to_float(const uint16_t *src, float *dst, int width, const PixelFormat &src_fmt) const = 0;
+	virtual void word_to_float(const ImageTile &src, const ImageTile &dst) const = 0;
 
 	/**
 	 * Convert from half precision to full precision.
@@ -60,14 +59,14 @@ public:
 	 * @param dst output samples
 	 * @param width number of samples
 	 */
-	virtual void half_to_float(const uint16_t *src, float *dst, int width) const = 0;
+	virtual void half_to_float(const ImageTile &src, const ImageTile &dst) const = 0;
 
 	/**
 	 * Convert from single precision to half precision.
 	 *
 	 * @see DepthConvert::half_to_float
 	 */
-	virtual void float_to_half(const float *src, uint16_t *dst, int width) const = 0;
+	virtual void float_to_half(const ImageTile &src, const ImageTile &dst) const = 0;
 };
 
 /**

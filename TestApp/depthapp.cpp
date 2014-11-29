@@ -4,7 +4,7 @@
 #include <string>
 #include "Common/cpuinfo.h"
 #include "Common/pixel.h"
-#include "Common/plane.h"
+#include "Common/tile.h"
 #include "Depth/depth.h"
 #include "apps.h"
 #include "frame.h"
@@ -95,8 +95,8 @@ void execute(const depth::Depth &depth, const Frame &in, Frame &out, int times,
 {
 	int width = in.width();
 	int height = in.height();
-	int src_stride = in.stride();
-	int dst_stride = out.stride();
+	int src_byte_stride = in.stride() * in.pxsize();
+	int dst_byte_stride = out.stride() * out.pxsize();
 
 	auto tmp = allocate_buffer(depth.tmp_size(width), PixelType::FLOAT);
 
@@ -108,10 +108,10 @@ void execute(const depth::Depth &depth, const Frame &in, Frame &out, int times,
 			PixelFormat src_format{ pxl_in, bits_in, fullrange_in, chroma };
 			PixelFormat dst_format{ pxl_out, bits_out, fullrange_out, chroma };
 
-			ImagePlane<const void> src_plane{ in.data(p), width, height, src_stride, src_format };
-			ImagePlane<void> dst_plane{ out.data(p), width, height, dst_stride, dst_format };
+			ImageTile src_tile{ (void *)in.data(p), src_byte_stride, width, height, src_format };
+			ImageTile dst_tile{ out.data(p), dst_byte_stride, width, height, dst_format };
 
-			depth.process(src_plane, dst_plane, tmp.data());
+			depth.process_tile(src_tile, dst_tile, tmp.data());
 		}
 	});
 }
@@ -122,8 +122,8 @@ void export_for_bmp(const Frame &in, Frame &out, PixelType type, int bits, bool 
 
 	int width = in.width();
 	int height = in.height();
-	int src_stride = in.stride();
-	int dst_stride = out.stride();
+	int src_byte_stride = in.stride() * in.pxsize();
+	int dst_byte_stride = out.stride() * out.pxsize();
 
 	auto tmp = allocate_buffer(depth.tmp_size(width), PixelType::FLOAT);
 
@@ -133,10 +133,10 @@ void export_for_bmp(const Frame &in, Frame &out, PixelType type, int bits, bool 
 		PixelFormat src_format{ type, bits, fullrange, chroma };
 		PixelFormat dst_format{ PixelType::BYTE, 8, fullrange, chroma };
 
-		ImagePlane<const void> src_plane{ in.data(p), width, height, src_stride, src_format };
-		ImagePlane<void> dst_plane{ out.data(p), width, height, dst_stride, dst_format };
+		ImageTile src_tile{ (void *)in.data(p), src_byte_stride, width, height, src_format };
+		ImageTile dst_tile{ out.data(p), dst_byte_stride, width, height, dst_format };
 
-		depth.process(src_plane, dst_plane, tmp.data());
+		depth.process_tile(src_tile, dst_tile, tmp.data());
 	}
 }
 

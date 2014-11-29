@@ -345,29 +345,13 @@ int zimg_depth_process(zimg_depth_context *ctx, const void *src, void *dst, void
 	zimg_clear_last_error();
 
 	try {
-		PixelFormat src_format;
-		PixelFormat dst_format;
+		PixelFormat src_format{ get_pixel_type(pixel_in), depth_in, !!fullrange_in, !!chroma };
+		PixelFormat dst_format{ get_pixel_type(pixel_out), depth_out, !!fullrange_out, !!chroma };
 
-		int src_pxsize;
-		int dst_pxsize;
+		ImageTile src_tile{ (void *)src, src_stride, width, height, src_format };
+		ImageTile dst_tile{ dst, dst_stride, width, height, dst_format };
 
-		src_format.type = get_pixel_type(pixel_in);
-		src_format.depth = depth_in;
-		src_format.fullrange = !!fullrange_in;
-		src_format.chroma = !!chroma;
-
-		dst_format.type = get_pixel_type(pixel_out);
-		dst_format.depth = depth_out;
-		dst_format.fullrange = !!fullrange_out;
-		dst_format.chroma = !!chroma;
-
-		src_pxsize = pixel_size(src_format.type);
-		dst_pxsize = pixel_size(dst_format.type);
-
-		ImagePlane<const void> src_plane{ src, width, height, src_stride / src_pxsize, src_format };
-		ImagePlane<void> dst_plane{ dst, width, height, dst_stride / dst_pxsize, dst_format };
-
-		ctx->p.process(src_plane, dst_plane, tmp);
+		ctx->p.process_tile(src_tile, dst_tile, tmp);
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}

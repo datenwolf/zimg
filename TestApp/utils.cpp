@@ -10,7 +10,7 @@
 #include "Common/align.h"
 #include "Common/cpuinfo.h"
 #include "Common/pixel.h"
-#include "Common/plane.h"
+#include "Common/tile.h"
 #include "Depth/depth.h"
 #include "frame.h"
 #include "utils.h"
@@ -72,23 +72,25 @@ void convert_frame(const Frame &in, Frame &out, zimg::PixelType pxl_in, zimg::Pi
 	int width = in.width();
 	int height = in.height();
 	int planes = in.planes();
+	int src_byte_stride = in.stride() * in.pxsize();
+	int dst_byte_stride = out.stride() * out.pxsize();
 
 	for (int p = 0; p < planes; ++p) {
 		bool plane_fullrange = fullrange || p == 3; // Always treat alpha as fullrange.
 		bool plane_chroma = yuv && (p == 1 || p == 2); // Chroma planes.
 
-		PixelFormat src_fmt = default_pixel_format(pxl_in);
-		PixelFormat dst_fmt = default_pixel_format(pxl_out);
+		PixelFormat src_format = default_pixel_format(pxl_in);
+		PixelFormat dst_format = default_pixel_format(pxl_out);
 
-		src_fmt.fullrange = plane_fullrange;
-		src_fmt.chroma = plane_chroma;
-		dst_fmt.fullrange = plane_fullrange;
-		dst_fmt.chroma = plane_chroma;
+		src_format.fullrange = plane_fullrange;
+		src_format.chroma = plane_chroma;
+		dst_format.fullrange = plane_fullrange;
+		dst_format.chroma = plane_chroma;
 
-		ImagePlane<const void> src_plane{ in.data(p), width, height, in.stride(), src_fmt };
-		ImagePlane<void> dst_plane{ out.data(p), width, height, out.stride(), dst_fmt };
+		ImageTile src_tile{ (void *)in.data(p), src_byte_stride, width, height, src_format };
+		ImageTile dst_tile{ out.data(p), dst_byte_stride, width, height, dst_format };
 
-		convert->process(src_plane, dst_plane, nullptr);
+		convert->process_tile(src_tile, dst_tile, nullptr);
 	}
 }
 

@@ -9,9 +9,9 @@
 namespace zimg {;
 
 enum class CPUClass;
+enum class PixelType;
 
-template <class T>
-class ImagePlane;
+struct ImageTile;
 
 namespace depth {;
 
@@ -54,22 +54,32 @@ public:
 	Depth(DitherType type, CPUClass cpu);
 
 	/**
+	 * Check if the given pixel type conversion can be applied on tiles.
+	 *
+	 * @param src_type input pixel type
+	 * @param dst_type output pixel type
+	 * @return true if supported, else false
+	 */
+	bool tile_supported(PixelType src_type, PixelType dst_type) const;
+
+	/**
 	 * Get the size of the temporary buffer required by the conversion.
 	 *
-	 * @param width width of image line.
+	 * @param width width of image tile
 	 * @return the size of the temporary buffer in units of floats
 	 */
 	size_t tmp_size(int width) const;
 
 	/**
-	 * Process an image.
+	 * Process a tile. Not all conversions can be applied on individual tiles.
+	 * If the operation can not be tiled, the tile must span an entire plane.
 	 *
-	 * @param src input plane
-	 * @param dst output plane
+	 * @param src input tile
+	 * @param dst output tile
 	 * @param tmp temporary buffer (@see Depth::tmp_size)
-	 * @throws ZimgUnsupportedError if conversion not supported
+	 * @see Depth::tile_supported
 	 */
-	void process(const ImagePlane<const void> &src, const ImagePlane<void> &dst, void *tmp) const;
+	void process_tile(const ImageTile &src, const ImageTile &dst, void *tmp) const;
 };
 
 } // namespace depth

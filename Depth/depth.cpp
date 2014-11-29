@@ -1,8 +1,8 @@
 #include <cstddef>
 #include <utility>
 #include "Common/except.h"
-#include "Common/plane.h"
 #include "Common/pixel.h"
+#include "Common/tile.h"
 #include "depth.h"
 #include "depth_convert.h"
 #include "dither.h"
@@ -12,73 +12,47 @@ namespace depth {;
 
 namespace {;
 
-template <class Func, class T, class U, class... Args>
-void invoke_depth(const DepthConvert &depth, Func func, const ImagePlane<const T> &src, const ImagePlane<U> &dst, Args... arg)
+void convert_dithered(const DitherConvert &dither, const ImageTile &src, const ImageTile &dst, void *tmp)
 {
-	for (int i = 0; i < src.height(); ++i) {
-		(depth.*func)(src[i], dst[i], src.width(), std::forward<Args>(arg)...);
-	}
-}
-
-void convert_dithered(const DitherConvert &dither, const ImagePlane<const void> &src, const ImagePlane<void> &dst, void *tmp)
-{
-	ImagePlane<const uint8_t> src_b = plane_cast<const uint8_t>(src);
-	ImagePlane<const uint16_t> src_w = plane_cast<const uint16_t>(src);
-	ImagePlane<const float> src_f = plane_cast<const float>(src);
-
-	ImagePlane<uint8_t> dst_b = plane_cast<uint8_t>(dst);
-	ImagePlane<uint16_t> dst_w = plane_cast<uint16_t>(dst);
-
-	PixelType src_type = src.format().type;
-	PixelType dst_type = dst.format().type;
+	PixelType src_type = src.format.type;
+	PixelType dst_type = dst.format.type;
 	float *tmp_f = (float *)tmp;
 
 	if (src_type == PixelType::BYTE && dst_type == PixelType::BYTE)
-		dither.byte_to_byte(src_b, dst_b, tmp_f);
+		dither.byte_to_byte(src, dst, tmp_f);
 	else if (src_type == PixelType::BYTE && dst_type == PixelType::WORD)
-		dither.byte_to_word(src_b, dst_w, tmp_f);
+		dither.byte_to_word(src, dst, tmp_f);
 	else if (src_type == PixelType::WORD && dst_type == PixelType::BYTE)
-		dither.word_to_byte(src_w, dst_b, tmp_f);
+		dither.word_to_byte(src, dst, tmp_f);
 	else if (src_type == PixelType::WORD && dst_type == PixelType::WORD)
-		dither.word_to_word(src_w, dst_w, tmp_f);
+		dither.word_to_word(src, dst, tmp_f);
 	else if (src_type == PixelType::HALF && dst_type == PixelType::BYTE)
-		dither.half_to_byte(src_w, dst_b, tmp_f);
+		dither.half_to_byte(src, dst, tmp_f);
 	else if (src_type == PixelType::HALF && dst_type == PixelType::WORD)
-		dither.half_to_word(src_w, dst_w, tmp_f);
+		dither.half_to_word(src, dst, tmp_f);
 	else if (src_type == PixelType::FLOAT && dst_type == PixelType::BYTE)
-		dither.float_to_byte(src_f, dst_b, tmp_f);
+		dither.float_to_byte(src, dst, tmp_f);
 	else if (src_type == PixelType::FLOAT && dst_type == PixelType::WORD)
-		dither.float_to_word(src_f, dst_w, tmp_f);
-	else
-		throw ZimgUnsupportedError{ "no conversion found between pixel types" };
+		dither.float_to_word(src, dst, tmp_f);
 }
 
-void convert_depth(const DepthConvert &depth, const ImagePlane<const void> &src, const ImagePlane<void> &dst)
+void convert_depth(const DepthConvert &depth, const ImageTile &src, const ImageTile &dst)
 {
-	ImagePlane<const uint8_t> src_b = plane_cast<const uint8_t>(src);
-	ImagePlane<const uint16_t> src_w = plane_cast<const uint16_t>(src);
-	ImagePlane<const float> src_f = plane_cast<const float>(src);
-
-	ImagePlane<uint16_t> dst_w = plane_cast<uint16_t>(dst);
-	ImagePlane<float> dst_f = plane_cast<float>(dst);
-
-	PixelType src_type = src.format().type;
-	PixelType dst_type = dst.format().type;
+	PixelType src_type = src.format.type;
+	PixelType dst_type = dst.format.type;
 
 	if (src_type == PixelType::BYTE && dst_type == PixelType::HALF)
-		invoke_depth(depth, &DepthConvert::byte_to_half, src_b, dst_w, src.format());
+		depth.byte_to_half(src, dst);
 	else if (src_type == PixelType::BYTE && dst_type == PixelType::FLOAT)
-		invoke_depth(depth, &DepthConvert::byte_to_float, src_b, dst_f, src.format());
+		depth.byte_to_float(src, dst);
 	else if (src_type == PixelType::WORD && dst_type == PixelType::HALF)
-		invoke_depth(depth, &DepthConvert::word_to_half, src_w, dst_w, src.format());
+		depth.word_to_half(src, dst);
 	else if (src_type == PixelType::WORD && dst_type == PixelType::FLOAT)
-		invoke_depth(depth, &DepthConvert::word_to_float, src_w, dst_f, src.format());
+		depth.word_to_float(src, dst);
 	else if (src_type == PixelType::HALF && dst_type == PixelType::FLOAT)
-		invoke_depth(depth, &DepthConvert::half_to_float, src_w, dst_f);
+		depth.half_to_float(src, dst);
 	else if (src_type == PixelType::FLOAT && dst_type == PixelType::HALF)
-		invoke_depth(depth, &DepthConvert::float_to_half, src_f, dst_w);
-	else
-		throw ZimgUnsupportedError{ "no conversion found between pixel types" };
+		depth.float_to_half(src, dst);
 }
 
 } // namespace
@@ -95,14 +69,19 @@ catch (const std::bad_alloc &)
 	throw ZimgOutOfMemory{};
 }
 
+bool Depth::tile_supported(PixelType src_type, PixelType dst_type) const
+{
+	return dst_type == PixelType::HALF || dst_type == PixelType::WORD || !m_error_diffusion;
+}
+
 size_t Depth::tmp_size(int width) const
 {
 	return m_error_diffusion ? ((size_t)width + 2) * 2 : 0;
 }
 
-void Depth::process(const ImagePlane<const void> &src, const ImagePlane<void> &dst, void *tmp) const
+void Depth::process_tile(const ImageTile &src, const ImageTile &dst, void *tmp) const
 {
-	if (dst.format().type >= PixelType::HALF)
+	if (dst.format.type >= PixelType::HALF)
 		convert_depth(*m_depth, src, dst);
 	else
 		convert_dithered(*m_dither, src, dst, tmp);

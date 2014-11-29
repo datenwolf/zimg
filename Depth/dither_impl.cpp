@@ -5,7 +5,7 @@
 #include <vector>
 #include "Common/align.h"
 #include "Common/except.h"
-#include "Common/plane.h"
+#include "Common/tile.h"
 #include "depth.h"
 #include "dither_impl.h"
 #include "dither_impl_x86.h"
@@ -61,30 +61,21 @@ void get_random_dithers(float *p)
 
 class OrderedDitherC : public OrderedDither {
 	template <class T, class U, class ToFloat, class FromFloat>
-	void dither(const ImagePlane<const T> &src, const ImagePlane<U> &dst, float *tmp, int depth, ToFloat to_float, FromFloat from_float) const
+	void dither(const ImageTile &src, const ImageTile &dst, int depth, ToFloat to_float, FromFloat from_float) const
 	{
-		int width = src.width();
-		int height = src.height();
+		TileView<const T> src_view{ src };
+		TileView<U> dst_view{ dst };
+
+		const float *dither_data = m_dither.data();
 
 		float scale = 1.0f / (float)(1 << (depth - 1));
 		auto dither_pixel = [=](T x, float d) { return from_float(to_float(x) + d * scale); };
 
-		for (ptrdiff_t i = 0; i < height; ++i) {
-			ptrdiff_t loop_end = mod(width, NUM_DITHERS_H);
-			int m;
+		for (int i = 0; i < src.height; ++i) {
+			const float *dither_row = &dither_data[(i % NUM_DITHERS_V) * NUM_DITHERS_H];
 
-			const float *dith = m_dither.data() + (i % NUM_DITHERS_V) * NUM_DITHERS_H;
-
-			for (ptrdiff_t j = 0; j < loop_end; j += NUM_DITHERS_H) {
-				m = 0;
-				for (ptrdiff_t jj = j; jj < j + NUM_DITHERS_H; ++jj) {
-					dst[i][jj] = dither_pixel(src[i][jj], dith[m++]);
-				}
-			}
-
-			m = 0;
-			for (ptrdiff_t j = loop_end; j < width; ++j) {
-				dst[i][j] = dither_pixel(src[i][j], dith[m++]);
+			for (int j = 0; j < src.width; ++j) {
+				dst_view[i][j] = dither_pixel(src_view[i][j], dither_row[j % NUM_DITHERS_H]);
 			}
 		}
 	}
@@ -92,48 +83,48 @@ public:
 	explicit OrderedDitherC(const float *dither) : OrderedDither(dither)
 	{}
 
-	void byte_to_byte(const ImagePlane<const uint8_t> &src, const ImagePlane<uint8_t> &dst, float *tmp) const override
+	void byte_to_byte(const ImageTile &src, const ImageTile &dst, float *) const override
 	{
-		dither(src, dst, tmp, dst.format().depth,
-		       make_integer_to_float<uint8_t>(src.format()), make_float_to_integer<uint8_t>(dst.format()));
+		dither<uint8_t, uint8_t>(src, dst, dst.format.depth,
+		                         make_integer_to_float<uint8_t>(src.format), make_float_to_integer<uint8_t>(dst.format));
 	}
 
-	void byte_to_word(const ImagePlane<const uint8_t> &src, const ImagePlane<uint16_t> &dst, float *tmp) const override
+	void byte_to_word(const ImageTile &src, const ImageTile &dst, float *) const override
 	{
-		dither(src, dst, tmp, dst.format().depth,
-		       make_integer_to_float<uint8_t>(src.format()), make_float_to_integer<uint16_t>(dst.format()));
+		dither<uint8_t, uint16_t>(src, dst, dst.format.depth,
+		                          make_integer_to_float<uint8_t>(src.format), make_float_to_integer<uint16_t>(dst.format));
 	}
 
-	void word_to_byte(const ImagePlane<const uint16_t> &src, const ImagePlane<uint8_t> &dst, float *tmp) const override
+	void word_to_byte(const ImageTile &src, const ImageTile &dst, float *) const override
 	{
-		dither(src, dst, tmp, dst.format().depth,
-		       make_integer_to_float<uint16_t>(src.format()), make_float_to_integer<uint8_t>(dst.format()));
+		dither<uint16_t, uint8_t>(src, dst, dst.format.depth,
+		                          make_integer_to_float<uint16_t>(src.format), make_float_to_integer<uint8_t>(dst.format));
 	}
 
-	void word_to_word(const ImagePlane<const uint16_t> &src, const ImagePlane<uint16_t> &dst, float *tmp) const override
+	void word_to_word(const ImageTile &src, const ImageTile &dst, float *) const override
 	{
-		dither(src, dst, tmp, dst.format().depth,
-		       make_integer_to_float<uint16_t>(src.format()), make_float_to_integer<uint16_t>(dst.format()));
+		dither<uint16_t, uint16_t>(src, dst, dst.format.depth,
+		                           make_integer_to_float<uint16_t>(src.format), make_float_to_integer<uint16_t>(dst.format));
 	}
 
-	void half_to_byte(const ImagePlane<const uint16_t> &src, const ImagePlane<uint8_t> &dst, float *tmp) const override
+	void half_to_byte(const ImageTile &src, const ImageTile &dst, float *) const override
 	{
-		dither(src, dst, tmp, dst.format().depth, depth::half_to_float, make_float_to_integer<uint8_t>(dst.format()));
+		dither<uint16_t, uint8_t>(src, dst, dst.format.depth, depth::half_to_float, make_float_to_integer<uint8_t>(dst.format));
 	}
 
-	void half_to_word(const ImagePlane<const uint16_t> &src, const ImagePlane<uint16_t> &dst, float *tmp) const override
+	void half_to_word(const ImageTile &src, const ImageTile &dst, float *) const override
 	{
-		dither(src, dst, tmp, dst.format().depth, depth::half_to_float, make_float_to_integer<uint16_t>(dst.format()));
+		dither<uint16_t, uint16_t>(src, dst, dst.format.depth, depth::half_to_float, make_float_to_integer<uint16_t>(dst.format));
 	}
 
-	void float_to_byte(const ImagePlane<const float> &src, const ImagePlane<uint8_t> &dst, float *tmp) const override
+	void float_to_byte(const ImageTile &src, const ImageTile &dst, float *) const override
 	{
-		dither(src, dst, tmp, dst.format().depth, identity<float>, make_float_to_integer<uint8_t>(dst.format()));
+		dither<float, uint8_t>(src, dst, dst.format.depth, identity<float>, make_float_to_integer<uint8_t>(dst.format));
 	}
 
-	void float_to_word(const ImagePlane<const float> &src, const ImagePlane<uint16_t> &dst, float *tmp) const override
+	void float_to_word(const ImageTile &src, const ImageTile &dst, float *) const override
 	{
-		dither(src, dst, tmp, dst.format().depth, identity<float>, make_float_to_integer<uint16_t>(dst.format()));
+		dither<float, uint16_t>(src, dst, dst.format.depth, identity<float>, make_float_to_integer<uint16_t>(dst.format));
 	}
 };
 
