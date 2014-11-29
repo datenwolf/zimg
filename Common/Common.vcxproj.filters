@@ -36,5 +36,8 @@
     <ClInclude Include="matrix.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="tile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
