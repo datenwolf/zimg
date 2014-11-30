@@ -69,8 +69,10 @@ inline FORCE_INLINE void transpose8_ps(__m256 &row0, __m256 &row1, __m256 &row2,
 template <bool DoLoop, class Policy>
 void filter_plane_h_avx2(const BilinearContext &ctx, const ImageTile &src, const ImageTile &dst, typename Policy::data_type *tmp, Policy policy)
 {
-	TileView<const typename Policy::data_type> src_view{ src };
-	TileView<typename Policy::data_type> dst_view{ dst };
+	typedef typename Policy::data_type data_type;
+
+	TileView<const data_type> src_view{ src };
+	TileView<data_type> dst_view{ dst };
 
 	const float *matrix_data = ctx.matrix_coefficients.data();
 	const int *matrix_left = ctx.matrix_row_offsets.data();
@@ -84,23 +86,23 @@ void filter_plane_h_avx2(const BilinearContext &ctx, const ImageTile &src, const
 	const float *pu = ctx.lu_u.data();
 
 	for (int i = 0; i < mod(src_height, 8); i += 8) {
-		const typename Policy::data_type *src_ptr0 = src_view[i + 0];
-		const typename Policy::data_type *src_ptr1 = src_view[i + 1];
-		const typename Policy::data_type *src_ptr2 = src_view[i + 2];
-		const typename Policy::data_type *src_ptr3 = src_view[i + 3];
-		const typename Policy::data_type *src_ptr4 = src_view[i + 4];
-		const typename Policy::data_type *src_ptr5 = src_view[i + 5];
-		const typename Policy::data_type *src_ptr6 = src_view[i + 6];
-		const typename Policy::data_type *src_ptr7 = src_view[i + 7];
+		const data_type *src_ptr0 = src_view[i + 0];
+		const data_type *src_ptr1 = src_view[i + 1];
+		const data_type *src_ptr2 = src_view[i + 2];
+		const data_type *src_ptr3 = src_view[i + 3];
+		const data_type *src_ptr4 = src_view[i + 4];
+		const data_type *src_ptr5 = src_view[i + 5];
+		const data_type *src_ptr6 = src_view[i + 6];
+		const data_type *src_ptr7 = src_view[i + 7];
 
-		typename Policy::data_type *dst_ptr0 = dst_view[i + 0];
-		typename Policy::data_type *dst_ptr1 = dst_view[i + 1];
-		typename Policy::data_type *dst_ptr2 = dst_view[i + 2];
-		typename Policy::data_type *dst_ptr3 = dst_view[i + 3];
-		typename Policy::data_type *dst_ptr4 = dst_view[i + 4];
-		typename Policy::data_type *dst_ptr5 = dst_view[i + 5];
-		typename Policy::data_type *dst_ptr6 = dst_view[i + 6];
-		typename Policy::data_type *dst_ptr7 = dst_view[i + 7];
+		data_type *dst_ptr0 = dst_view[i + 0];
+		data_type *dst_ptr1 = dst_view[i + 1];
+		data_type *dst_ptr2 = dst_view[i + 2];
+		data_type *dst_ptr3 = dst_view[i + 3];
+		data_type *dst_ptr4 = dst_view[i + 4];
+		data_type *dst_ptr5 = dst_view[i + 5];
+		data_type *dst_ptr6 = dst_view[i + 6];
+		data_type *dst_ptr7 = dst_view[i + 7];
 
 		int j;
 
@@ -266,8 +268,10 @@ void filter_plane_h_avx2(const BilinearContext &ctx, const ImageTile &src, const
 template <class Policy>
 void filter_plane_v_avx2(const BilinearContext &ctx, const ImageTile &src, const ImageTile &dst, Policy policy)
 {
-	TileView<const typename Policy::data_type> src_view{ src };
-	TileView<typename Policy::data_type> dst_view{ dst };
+	typedef Policy::data_type data_type;
+
+	TileView<const data_type> src_view{ src };
+	TileView<data_type> dst_view{ dst };
 
 	const float *matrix_data = ctx.matrix_coefficients.data();
 	const int *matrix_left = ctx.matrix_row_offsets.data();
@@ -283,18 +287,18 @@ void filter_plane_v_avx2(const BilinearContext &ctx, const ImageTile &src, const
 		const float *matrix_row = &matrix_data[i * matrix_stride];
 		int top = matrix_left[i];
 
-		typename Policy::data_type *dst_ptr = dst_view[i];
+		data_type *dst_ptr = dst_view[i];
 
 		// Matrix-vector product.
 		for (int k = 0; k < mod(ctx.matrix_row_size, 8); k += 8) {
-			const typename Policy::data_type *src_ptr0 = src_view[top + k + 0];
-			const typename Policy::data_type *src_ptr1 = src_view[top + k + 1];
-			const typename Policy::data_type *src_ptr2 = src_view[top + k + 2];
-			const typename Policy::data_type *src_ptr3 = src_view[top + k + 3];
-			const typename Policy::data_type *src_ptr4 = src_view[top + k + 4];
-			const typename Policy::data_type *src_ptr5 = src_view[top + k + 5];
-			const typename Policy::data_type *src_ptr6 = src_view[top + k + 6];
-			const typename Policy::data_type *src_ptr7 = src_view[top + k + 7];
+			const data_type *src_ptr0 = src_view[top + k + 0];
+			const data_type *src_ptr1 = src_view[top + k + 1];
+			const data_type *src_ptr2 = src_view[top + k + 2];
+			const data_type *src_ptr3 = src_view[top + k + 3];
+			const data_type *src_ptr4 = src_view[top + k + 4];
+			const data_type *src_ptr5 = src_view[top + k + 5];
+			const data_type *src_ptr6 = src_view[top + k + 6];
+			const data_type *src_ptr7 = src_view[top + k + 7];
 
 			__m256 coeff0 = _mm256_broadcast_ss(&matrix_row[k + 0]);
 			__m256 coeff1 = _mm256_broadcast_ss(&matrix_row[k + 1]);
@@ -347,13 +351,13 @@ void filter_plane_v_avx2(const BilinearContext &ctx, const ImageTile &src, const
 			int m = ctx.matrix_row_size % 8;
 			int k = ctx.matrix_row_size - m;
 
-			const typename Policy::data_type *src_ptr0 = src_view[top + k + 0];
-			const typename Policy::data_type *src_ptr1 = src_view[top + k + 1];
-			const typename Policy::data_type *src_ptr2 = src_view[top + k + 2];
-			const typename Policy::data_type *src_ptr3 = src_view[top + k + 3];
-			const typename Policy::data_type *src_ptr4 = src_view[top + k + 4];
-			const typename Policy::data_type *src_ptr5 = src_view[top + k + 5];
-			const typename Policy::data_type *src_ptr6 = src_view[top + k + 6];
+			const data_type *src_ptr0 = src_view[top + k + 0];
+			const data_type *src_ptr1 = src_view[top + k + 1];
+			const data_type *src_ptr2 = src_view[top + k + 2];
+			const data_type *src_ptr3 = src_view[top + k + 3];
+			const data_type *src_ptr4 = src_view[top + k + 4];
+			const data_type *src_ptr5 = src_view[top + k + 5];
+			const data_type *src_ptr6 = src_view[top + k + 6];
 
 			__m256 coeff0 = _mm256_broadcast_ss(&matrix_row[k + 0]);
 			__m256 coeff1 = _mm256_broadcast_ss(&matrix_row[k + 1]);
@@ -410,7 +414,7 @@ void filter_plane_v_avx2(const BilinearContext &ctx, const ImageTile &src, const
 		__m256 c = _mm256_broadcast_ss(&pc[i]);
 		__m256 l = _mm256_broadcast_ss(&pl[i]);
 
-		const typename Policy::data_type *dst_prev = i ? dst_view[i - 1] : nullptr;
+		const data_type *dst_prev = i ? dst_view[i - 1] : nullptr;
 
 		for (int j = 0; j < mod(src_width, 8); j += 8) {
 			__m256 z = i ? policy.load_8(&dst_prev[j]) : _mm256_setzero_ps();
@@ -429,8 +433,8 @@ void filter_plane_v_avx2(const BilinearContext &ctx, const ImageTile &src, const
 	for (int i = ctx.dst_width; i > 0; --i) {
 		__m256 u = _mm256_broadcast_ss(pu + i - 1);
 
-		const typename Policy::data_type *dst_prev = i < ctx.dst_width ? dst_view[i] : nullptr;
-		typename Policy::data_type *dst_ptr = dst_view[i - 1];
+		const data_type *dst_prev = i < ctx.dst_width ? dst_view[i] : nullptr;
+		data_type *dst_ptr = dst_view[i - 1];
 
 		for (int j = 0; j < mod(src_width, 8); j += 8) {
 			__m256 w = i < ctx.dst_width ? policy.load_8(&dst_prev[j]) : _mm256_setzero_ps();

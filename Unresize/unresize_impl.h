@@ -27,7 +27,9 @@ template <class Policy>
 inline FORCE_INLINE void filter_scanline_h_forward(const BilinearContext &ctx, const ImageTile &src, typename Policy::data_type * RESTRICT tmp,
 												   int i, int j_begin, int j_end, Policy policy)
 {
-	TileView<const typename Policy::data_type> src_view{ src };
+	typedef Policy::data_type data_type;
+
+	TileView<const data_type> src_view{ src };
 
 	const float *c = ctx.lu_c.data();
 	const float *l = ctx.lu_l.data();
@@ -55,7 +57,9 @@ template <class Policy>
 inline FORCE_INLINE void filter_scanline_h_back(const BilinearContext &ctx, const typename Policy::data_type * RESTRICT tmp, const ImageTile &dst,
 												int i, int j_begin, int j_end, Policy policy)
 {
-	TileView<typename Policy::data_type> dst_view{ dst };
+	typedef Policy::data_type data_type;
+
+	TileView<data_type> dst_view{ dst };
 
 	const float *u = ctx.lu_u.data();
 	float w = j_begin < ctx.dst_width ? policy.load(&dst_view[i][j_begin]) : 0;
@@ -71,8 +75,10 @@ template <class Policy>
 inline FORCE_INLINE void filter_scanline_v_forward(const BilinearContext &ctx, const ImageTile &src, const ImageTile &dst,
 												   int i, int j_begin, int j_end, Policy policy)
 {
-	TileView<const typename Policy::data_type> src_view{ src };
-	TileView<typename Policy::data_type> dst_view{ dst };
+	typedef Policy::data_type data_type;
+
+	TileView<const data_type> src_view{ src };
+	TileView<data_type> dst_view{ dst };
 
 	const float *c = ctx.lu_c.data();
 	const float *l = ctx.lu_l.data();
@@ -98,7 +104,9 @@ inline FORCE_INLINE void filter_scanline_v_forward(const BilinearContext &ctx, c
 template <class Policy>
 inline FORCE_INLINE void filter_scanline_v_back(const BilinearContext &ctx, const ImageTile &dst, int i, int j_begin, int j_end, Policy policy)
 {
-	TileView<typename Policy::data_type> dst_view{ dst };
+	typedef Policy::data_type data_type;
+
+	TileView<data_type> dst_view{ dst };
 
 	const float *u = ctx.lu_u.data();
 
