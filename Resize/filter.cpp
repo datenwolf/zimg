@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cmath>
 #include <vector>
+#include "Common/align.h"
 #include "Common/except.h"
 #include "Common/matrix.h"
 #include "filter.h"
@@ -49,6 +50,9 @@ EvaluatedFilter matrix_to_filter(const RowMatrix<double> &m)
 			e.data_i16()[(ptrdiff_t)i * e.stride_i16() + j] = coeff_i16;
 		}
 		e.left()[i] = left;
+	}
+	for (size_t i = m.rows(); i < align(m.rows(), 64); ++i) {
+		e.left()[i] = e.left()[m.rows() - 1];
 	}
 
 	return e;
@@ -170,9 +174,9 @@ EvaluatedFilter::EvaluatedFilter(int width, int height) :
 	m_width{ width },
 	m_stride{ align(width, AlignmentOf<float>::value) },
 	m_stride_i16{ align(width, AlignmentOf<int16_t>::value) },
-	m_data((size_t)m_stride * height),
-	m_data_i16((size_t)m_stride_i16 * height),
-	m_left(height)
+	m_data((size_t)m_stride * align(height,64)),
+	m_data_i16((size_t)m_stride_i16 * align(height, 64)),
+	m_left(align(height, 64))
 {
 }
 
