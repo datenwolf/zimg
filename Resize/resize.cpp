@@ -29,17 +29,22 @@ size_t Resize::tmp_size(PixelType type, int width) const
 	return size;
 }
 
-void Resize::process(const ImageTile &src, const ImageTile &dst, void *tmp) const
+void Resize::dependent_rect(int dst_top, int dst_left, int dst_bottom, int dst_right, int *src_top, int *src_left, int *src_bottom, int *src_right) const
+{
+	m_impl->dependent_rect(dst_top, dst_left, dst_bottom, dst_right, src_top, src_left, src_bottom, src_right);
+}
+
+void Resize::process(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const
 {
 	switch (src.format.type) {
 	case PixelType::WORD:
-		m_impl->process_u16(src, dst, tmp);
+		m_impl->process_u16(src, dst, i, j, tmp);
 		break;
 	case PixelType::HALF:
-		m_impl->process_f16(src, dst, tmp);
+		m_impl->process_f16(src, dst, i, j, tmp);
 		break;
 	case PixelType::FLOAT:
-		m_impl->process_f32(src, dst, tmp);
+		m_impl->process_f32(src, dst, i, j, tmp);
 		break;
 	default:
 		throw ZimgUnsupportedError{ "only WORD, HALF, and FLOAT are supported for resize" };

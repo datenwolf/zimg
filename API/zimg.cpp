@@ -433,8 +433,8 @@ int zimg_resize_process(zimg_resize_context *ctx, const void *src, void *dst, vo
 
 		tmp = (char *)tmp + (size_t)tmp_stride * ctx->tmp_height;
 
-		ctx->pass1.process(src_tile, tmp_tile, tmp);
-		ctx->pass2.process(tmp_tile, dst_tile, tmp);
+		ctx->pass1.process(src_tile, tmp_tile, 0, 0, tmp);
+		ctx->pass2.process(tmp_tile, dst_tile, 0, 0, tmp);
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}

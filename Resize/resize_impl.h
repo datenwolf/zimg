@@ -58,20 +58,27 @@ struct ScalarPolicy_F32 {
 };
 
 template <class Policy>
-inline FORCE_INLINE void filter_plane_h_scalar(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst,
-											   int i_begin, int i_end, int j_begin, int j_end, Policy policy)
+inline FORCE_INLINE void resize_tile_h_scalar(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n,
+                                              int i_begin, int j_begin, int i_end, int j_end, Policy policy)
 {
-	TileView<const typename Policy::data_type> src_view{ src };
-	TileView<typename Policy::data_type> dst_view{ dst };
+	typedef typename Policy::data_type data_type;
+	typedef typename Policy::num_type num_type;
 
+	TileView<const data_type> src_view{ src };
+	TileView<data_type> dst_view{ dst };
+
+	int left_base = filter.left()[n];
+	
 	for (int i = i_begin; i < i_end; ++i) {
 		for (int j = j_begin; j < j_end; ++j) {
-			int left = filter.left()[j];
-			typename Policy::num_type accum = 0;
+			int filter_row = n + j;
+			int left = filter.left()[filter_row] - left_base;
+
+			num_type accum = 0;
 
 			for (int k = 0; k < filter.width(); ++k) {
-				typename Policy::num_type coeff = policy.coeff(filter, j, k);
-				typename Policy::num_type x = policy.load(&src_view[i][left + k]);
+				num_type coeff = policy.coeff(filter, filter_row, k);
+				num_type x = policy.load(&src_view[i][left + k]);
 
 				accum += coeff * x;
 			}
@@ -82,20 +89,27 @@ inline FORCE_INLINE void filter_plane_h_scalar(const EvaluatedFilter &filter, co
 }
 
 template <class Policy>
-inline FORCE_INLINE void filter_plane_v_scalar(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst,
-											   int i_begin, int i_end, int j_begin, int j_end, Policy policy)
+inline FORCE_INLINE void resize_tile_v_scalar(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n,
+                                              int i_begin, int j_begin, int i_end, int j_end, Policy policy)
 {
-	TileView<const typename Policy::data_type> src_view{ src };
-	TileView<typename Policy::data_type> dst_view{ dst };
+	typedef typename Policy::data_type data_type;
+	typedef typename Policy::num_type num_type;
+
+	TileView<const data_type> src_view{ src };
+	TileView<data_type> dst_view{ dst };
+
+	int top_base = filter.left()[n];
 
 	for (int i = i_begin; i < i_end; ++i) {
+		int filter_row = n + i;
+		int top = filter.left()[filter_row] - top_base;
+
 		for (int j = j_begin; j < j_end; ++j) {
-			int top = filter.left()[i];
-			typename Policy::num_type accum = 0;
+			num_type accum = 0;
 
 			for (int k = 0; k < filter.width(); ++k) {
-				typename Policy::num_type coeff = policy.coeff(filter, i, k);
-				typename Policy::num_type x = policy.load(&src_view[top + k][j]);
+				num_type coeff = policy.coeff(filter, filter_row, k);
+				num_type x = policy.load(&src_view[top + k][j]);
 
 				accum += coeff * x;
 			}
@@ -109,6 +123,7 @@ inline FORCE_INLINE void filter_plane_v_scalar(const EvaluatedFilter &filter, co
  * Base class for implementations of resizing filter.
  */
 class ResizeImpl {
+	bool m_horizontal;
 protected:
 	/**
 	 * Filter coefficients.
@@ -119,8 +134,9 @@ protected:
 	 * Initialize the implementation with the given coefficients.
 	 *
 	 * @param filter coefficients
+	 * @param horizontal whether filter is a horizontal resize
 	 */
-	ResizeImpl(const EvaluatedFilter &filter);
+	ResizeImpl(const EvaluatedFilter &filter, bool horizontal);
 public:
 	/**
 	 * Destroy implementation.
@@ -128,28 +144,44 @@ public:
 	virtual ~ResizeImpl() = 0;
 
 	/**
+	 * Get the input rectangle required to process an output tile.
+	 *
+	 * @param dst_top output top row index
+	 * @param dst_left output left column index
+	 * @param dst_bottom output bottom row index
+	 * @param dst_right output right column index
+	 * @param src_top pointer to receive input top row index
+	 * @param src_left pointer to receive input left column index
+	 * @param src_bottom pointer to receive output bottom row index
+	 * @param src_right pointer to receive output right column index
+	 */
+	void dependent_rect(int dst_top, int dst_left, int dst_bottom, int dst_right, int *src_top, int *src_left, int *src_bottom, int *src_right) const;
+
+	/**
 	 * Execute filter pass on an unsigned 16-bit image.
 	 *
-	 * @param src input plane
-	 * @param dst output plane
+	 * @param src input tile
+	 * @param dst output tile
+	 * @param i row index of output tile
+	 * @param j column index of output tile
 	 * @param tmp temporary buffer (implementation defined size)
 	 * @throws ZimgUnsupportedError if not supported
 	 */
-	virtual void process_u16(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
+	virtual void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const = 0;
 
 	/**
 	 * Execute filter pass on a half precision 16-bit image.
 	 *
 	 * @see ResizeImpl::process_u16_h
 	 */
-	virtual void process_f16(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
+	virtual void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const = 0;
 
 	/**
 	 * Execute filter pass on a single precision 32-bit image.
 	 *
 	 * @see ResizeImpl::process_u16_h
 	 */
-	virtual void process_f32(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
+	virtual void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const = 0;
 };
 
 /**

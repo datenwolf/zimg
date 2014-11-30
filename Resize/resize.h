@@ -26,8 +26,6 @@ class ResizeImpl;
 class Resize {
 	std::shared_ptr<ResizeImpl> m_impl;
 	bool m_horizontal;
-
-	void invoke_impl(const ImageTile &src, const ImageTile &dst, void *tmp) const;
 public:
 	/**
 	 * Initialize a null context. Cannot be used for execution.
@@ -59,15 +57,31 @@ public:
 	size_t tmp_size(PixelType type, int width) const;
 
 	/**
+	 * Get the input rectangle required to process an output tile.
+	 *
+	 * @param dst_top output top row index
+	 * @param dst_left output left column index
+	 * @param dst_bottom output bottom row index
+	 * @param dst_right output right column index
+	 * @param src_top pointer to receive input top row index
+	 * @param src_left pointer to receive input left column index
+	 * @param src_bottom pointer to receive output bottom row index
+	 * @param src_right pointer to receive output right column index
+	 */
+	void dependent_rect(int dst_top, int dst_left, int dst_bottom, int dst_right, int *src_top, int *src_left, int *src_bottom, int *src_right) const;
+
+	/**
 	 * Process an image. The input and output pixel formats must match.
-	 * The tile must span an entire plane.
+	 * The input tile must correspond to the required input sub-rectangle (@see Resize::dependent_rect).
 	 *
 	 * @param src input tile
 	 * @param dst output tile
+	 * @param i row index of output tile
+	 * @param j column index of output tile
 	 * @param tmp temporary buffer (@see Resize::tmp_size)
 	 * @throws ZimgUnsupportedError if pixel type not supported
 	 */
-	void process(const ImageTile &src, const ImageTile &dst, void *tmp) const;
+	void process(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const;
 };
 
 /**

@@ -168,7 +168,6 @@ double LanczosFilter::operator()(double x) const
 
 EvaluatedFilter::EvaluatedFilter(int width, int height) :
 	m_width{ width },
-	m_height{ height },
 	m_stride{ align(width, AlignmentOf<float>::value) },
 	m_stride_i16{ align(width, AlignmentOf<int16_t>::value) },
 	m_data((size_t)m_stride * height),
@@ -180,11 +179,6 @@ EvaluatedFilter::EvaluatedFilter(int width, int height) :
 int EvaluatedFilter::width() const
 {
 	return m_width;
-}
-
-int EvaluatedFilter::height() const
-{
-	return m_height;
 }
 
 int EvaluatedFilter::stride() const

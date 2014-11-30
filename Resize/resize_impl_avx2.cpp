@@ -127,21 +127,21 @@ inline FORCE_INLINE __m256i pack_i30_epi32(__m256i lo, __m256i hi)
 }
 
 template <bool DoLoop>
-void filter_plane_u16_h(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst)
+void resize_tile_u16_h_avx2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n)
 {
 	__m256i INT16_MIN_EPI16 = _mm256_set1_epi16(INT16_MIN);
 
 	TileView<const uint16_t> src_view{ src };
 	TileView<uint16_t> dst_view{ dst };
 
-	const int16_t *filter_data = filter.data_i16();
-	const int *filter_left = filter.left();
 	int filter_stride = filter.stride_i16();
 
-	int src_width = src.width;
-	int src_height = src.height;
+	const int16_t *filter_data = &filter.data_i16()[n * filter_stride];
+	const int *filter_left = &filter.left()[n];
 
-	for (int i = 0; i < mod(src_height, 8); i += 8) {
+	int left_base = filter_left[0];
+
+	for (int i = 0; i < mod(dst.height, 8); i += 8) {
 		const uint16_t *src_ptr0 = src_view[i + 0];
 		const uint16_t *src_ptr1 = src_view[i + 1];
 		const uint16_t *src_ptr2 = src_view[i + 2];
@@ -162,14 +162,14 @@ void filter_plane_u16_h(const EvaluatedFilter &filter, const ImageTile &src, con
 
 		int j;
 
-		for (j = 0; j < filter.height(); ++j) {
+		for (j = 0; j < dst.width; ++j) {
 			__m256i accum = _mm256_setzero_si256();
 			__m256i cached[16];
 
 			const int16_t *filter_row = &filter_data[j * filter_stride];
-			int left = filter_left[j];
+			int left = filter_left[j] - left_base;
 
-			if (left + filter_stride > src_width)
+			if (left + filter_stride > src.width)
 				break;
 
 			for (int k = 0; k < (DoLoop ? filter.width() : 16); k += 16) {
@@ -263,53 +263,55 @@ void filter_plane_u16_h(const EvaluatedFilter &filter, const ImageTile &src, con
 				_mm256_store_si256((__m256i *)&dst_ptr7[dst_j], packed);
 			}
 		}
-		filter_plane_h_scalar(filter, src, dst, i, i + 8, mod(j, 16), filter.height(), ScalarPolicy_U16{});
+		resize_tile_h_scalar(filter, src, dst, 0, i, mod(j, 16), i + 8, dst.width, ScalarPolicy_U16{});
 	}
-	filter_plane_h_scalar(filter, src, dst, mod(src_height, 8), src_height, 0, filter.height(), ScalarPolicy_U16{});
+	resize_tile_h_scalar(filter, src, dst, 0, mod(dst.height, 8), 0, dst.height, dst.width, ScalarPolicy_U16{});
 }
 
 template <bool DoLoop, class Policy>
-void filter_plane_fp_h(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, Policy policy)
+void resize_tile_fp_h_avx2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n, Policy policy)
 {
-	TileView<const typename Policy::data_type> src_view{ src };
-	TileView<typename Policy::data_type> dst_view{ dst };
+	typedef typename Policy::data_type data_type;
 
-	const float *filter_data = filter.data();
-	const int *filter_left = filter.left();
+	TileView<const data_type> src_view{ src };
+	TileView<data_type> dst_view{ dst };
+
 	int filter_stride = filter.stride();
 
-	int src_width = src.width;
-	int src_height = src.height;
+	const float *filter_data = &filter.data()[n * filter_stride];
+	const int *filter_left = &filter.left()[n];
 
-	for (int i = 0; i < mod(src_height, 8); i += 8) {
-		const typename Policy::data_type *src_ptr0 = src_view[i + 0];
-		const typename Policy::data_type *src_ptr1 = src_view[i + 1];
-		const typename Policy::data_type *src_ptr2 = src_view[i + 2];
-		const typename Policy::data_type *src_ptr3 = src_view[i + 3];
-		const typename Policy::data_type *src_ptr4 = src_view[i + 4];
-		const typename Policy::data_type *src_ptr5 = src_view[i + 5];
-		const typename Policy::data_type *src_ptr6 = src_view[i + 6];
-		const typename Policy::data_type *src_ptr7 = src_view[i + 7];
+	int left_base = filter_left[0];
 
-		typename Policy::data_type *dst_ptr0 = dst_view[i + 0];
-		typename Policy::data_type *dst_ptr1 = dst_view[i + 1];
-		typename Policy::data_type *dst_ptr2 = dst_view[i + 2];
-		typename Policy::data_type *dst_ptr3 = dst_view[i + 3];
-		typename Policy::data_type *dst_ptr4 = dst_view[i + 4];
-		typename Policy::data_type *dst_ptr5 = dst_view[i + 5];
-		typename Policy::data_type *dst_ptr6 = dst_view[i + 6];
-		typename Policy::data_type *dst_ptr7 = dst_view[i + 7];
+	for (int i = 0; i < mod(dst.height, 8); i += 8) {
+		const data_type *src_ptr0 = src_view[i + 0];
+		const data_type *src_ptr1 = src_view[i + 1];
+		const data_type *src_ptr2 = src_view[i + 2];
+		const data_type *src_ptr3 = src_view[i + 3];
+		const data_type *src_ptr4 = src_view[i + 4];
+		const data_type *src_ptr5 = src_view[i + 5];
+		const data_type *src_ptr6 = src_view[i + 6];
+		const data_type *src_ptr7 = src_view[i + 7];
+
+		data_type *dst_ptr0 = dst_view[i + 0];
+		data_type *dst_ptr1 = dst_view[i + 1];
+		data_type *dst_ptr2 = dst_view[i + 2];
+		data_type *dst_ptr3 = dst_view[i + 3];
+		data_type *dst_ptr4 = dst_view[i + 4];
+		data_type *dst_ptr5 = dst_view[i + 5];
+		data_type *dst_ptr6 = dst_view[i + 6];
+		data_type *dst_ptr7 = dst_view[i + 7];
 
 		int j;
 
-		for (j = 0; j < filter.height(); ++j) {
+		for (j = 0; j < dst.width; ++j) {
 			__m256 accum = _mm256_setzero_ps();
 			__m256 cached[8];
 
 			const float *filter_row = &filter_data[j * filter_stride];
-			int left = filter_left[j];
+			int left = filter_left[j] - left_base;
 
-			if (left + filter_stride > src_width)
+			if (left + filter_stride > src.width)
 				break;
 
 			for (int k = 0; k < (DoLoop ? filter.width() : 8); k += 8) {
@@ -370,27 +372,28 @@ void filter_plane_fp_h(const EvaluatedFilter &filter, const ImageTile &src, cons
 				policy.store_8(&dst_ptr7[dst_j], cached[7]);
 			}
 		}
-		filter_plane_h_scalar(filter, src, dst, i, i + 8, mod(j, 8), filter.height(), policy);
+		resize_tile_h_scalar(filter, src, dst, 0, i, mod(j, 8), i + 8, dst.width, policy);
 	}
-	filter_plane_h_scalar(filter, src, dst, mod(src_height, 8), src_height, 0, filter.height(), policy);
+	resize_tile_h_scalar(filter, src, dst, 0, mod(dst.height, 8), 0, dst.height, dst.width, policy);
 }
 
-void filter_plane_u16_v(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, uint32_t *tmp)
+void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n, uint32_t *tmp)
 {
 	__m256i INT16_MIN_EPI16 = _mm256_set1_epi16(INT16_MIN);
 
 	TileView<const uint16_t> src_view{ src };
 	TileView<uint16_t> dst_view{ dst };
 
-	const int16_t *filter_data = filter.data_i16();
-	const int *filter_left = filter.left();
 	int filter_stride = filter.stride_i16();
 
-	int src_width = src.width;
+	const int16_t *filter_data = &filter.data_i16()[n * filter_stride];
+	const int *filter_left = &filter.left()[n];
 
-	for (int i = 0; i < filter.height(); ++i) {
+	int top_base = filter_left[0];
+
+	for (int i = 0; i < dst.height; ++i) {
 		const int16_t *filter_row = &filter_data[i * filter_stride];
-		int top = filter_left[i];
+		int top = filter_left[i] - top_base;
 		uint16_t *dst_ptr = dst_view[i];
 
 		for (int k = 0; k < mod(filter.width(), 8); k += 8) {
@@ -417,7 +420,7 @@ void filter_plane_u16_v(const EvaluatedFilter &filter, const ImageTile &src, con
 			__m256i coeff45 = _mm256_unpacklo_epi16(coeff4, coeff5);
 			__m256i coeff67 = _mm256_unpacklo_epi16(coeff6, coeff7);
 
-			for (int j = 0; j < mod(src_width, 16); j += 16) {
+			for (int j = 0; j < mod(dst.width, 16); j += 16) {
 				__m256i x0, x1, x2, x3, x4, x5, x6, x7;
 				__m256i packed;
 
@@ -494,7 +497,7 @@ void filter_plane_u16_v(const EvaluatedFilter &filter, const ImageTile &src, con
 			__m256i coeff45 = _mm256_unpacklo_epi16(coeff4, coeff5);
 			__m256i coeff67 = _mm256_unpacklo_epi16(coeff6, coeff7);
 
-			for (ptrdiff_t j = 0; j < mod(src_width, 16); j += 16) {
+			for (ptrdiff_t j = 0; j < mod(dst.width, 16); j += 16) {
 				__m256i x0, x1, x2, x3, x4, x5, x6, x7;
 				__m256i packed;
 
@@ -546,36 +549,39 @@ void filter_plane_u16_v(const EvaluatedFilter &filter, const ImageTile &src, con
 				_mm256_store_si256((__m256i *)&dst_ptr[j], packed);
 			}
 		}
-		filter_plane_v_scalar(filter, src, dst, i, i + 1, mod(src_width, 16), src_width, ScalarPolicy_U16{});
+		resize_tile_v_scalar(filter, src, dst, 0, i, mod(dst.width, 16), i + 1, dst.width, ScalarPolicy_U16{});
 	}
 }
 
 template <class Policy>
-void filter_plane_fp_v(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, Policy policy)
+void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n, Policy policy)
 {
-	TileView<const typename Policy::data_type> src_view{ src };
-	TileView<typename Policy::data_type> dst_view{ dst };
+	typedef typename Policy::data_type data_type;
 
-	const float *filter_data = filter.data();
-	const int *filter_left = filter.left();
+	TileView<const data_type> src_view{ src };
+	TileView<data_type> dst_view{ dst };
+
 	int filter_stride = filter.stride();
 
-	int src_width = src.width;
+	const float *filter_data = &filter.data()[n * filter_stride];
+	const int *filter_left = &filter.left()[n];
 
-	for (int i = 0; i < filter.height(); ++i) {
+	int top_base = filter_left[0];
+
+	for (int i = 0; i < dst.height; ++i) {
 		const float *filter_row = &filter_data[i * filter_stride];
-		int top = filter_left[i];
-		typename Policy::data_type *dst_ptr = dst_view[i];
+		int top = filter_left[i] - top_base;
+		data_type *dst_ptr = dst_view[i];
 
 		for (int k = 0; k < mod(filter.width(), 8); k += 8) {
-			const typename Policy::data_type *src_ptr0 = src_view[top + k + 0];
-			const typename Policy::data_type *src_ptr1 = src_view[top + k + 1];
-			const typename Policy::data_type *src_ptr2 = src_view[top + k + 2];
-			const typename Policy::data_type *src_ptr3 = src_view[top + k + 3];
-			const typename Policy::data_type *src_ptr4 = src_view[top + k + 4];
-			const typename Policy::data_type *src_ptr5 = src_view[top + k + 5];
-			const typename Policy::data_type *src_ptr6 = src_view[top + k + 6];
-			const typename Policy::data_type *src_ptr7 = src_view[top + k + 7];
+			const data_type *src_ptr0 = src_view[top + k + 0];
+			const data_type *src_ptr1 = src_view[top + k + 1];
+			const data_type *src_ptr2 = src_view[top + k + 2];
+			const data_type *src_ptr3 = src_view[top + k + 3];
+			const data_type *src_ptr4 = src_view[top + k + 4];
+			const data_type *src_ptr5 = src_view[top + k + 5];
+			const data_type *src_ptr6 = src_view[top + k + 6];
+			const data_type *src_ptr7 = src_view[top + k + 7];
 
 			__m256 coeff0 = _mm256_broadcast_ss(&filter_row[k + 0]);
 			__m256 coeff1 = _mm256_broadcast_ss(&filter_row[k + 1]);
@@ -586,7 +592,7 @@ void filter_plane_fp_v(const EvaluatedFilter &filter, const ImageTile &src, cons
 			__m256 coeff6 = _mm256_broadcast_ss(&filter_row[k + 6]);
 			__m256 coeff7 = _mm256_broadcast_ss(&filter_row[k + 7]);
 
-			for (int j = 0; j < mod(src_width, 8); j += 8) {
+			for (int j = 0; j < mod(dst.width, 8); j += 8) {
 				__m256 x0, x1, x2, x3, x4, x5, x6, x7;
 				__m256 accum0, accum1, accum2, accum3;
 
@@ -628,13 +634,13 @@ void filter_plane_fp_v(const EvaluatedFilter &filter, const ImageTile &src, cons
 			int m = filter.width() % 8;
 			int k = filter.width() - m;
 
-			const typename Policy::data_type *src_ptr0 = src_view[top + k + 0];
-			const typename Policy::data_type *src_ptr1 = src_view[top + k + 1];
-			const typename Policy::data_type *src_ptr2 = src_view[top + k + 2];
-			const typename Policy::data_type *src_ptr3 = src_view[top + k + 3];
-			const typename Policy::data_type *src_ptr4 = src_view[top + k + 4];
-			const typename Policy::data_type *src_ptr5 = src_view[top + k + 5];
-			const typename Policy::data_type *src_ptr6 = src_view[top + k + 6];
+			const data_type *src_ptr0 = src_view[top + k + 0];
+			const data_type *src_ptr1 = src_view[top + k + 1];
+			const data_type *src_ptr2 = src_view[top + k + 2];
+			const data_type *src_ptr3 = src_view[top + k + 3];
+			const data_type *src_ptr4 = src_view[top + k + 4];
+			const data_type *src_ptr5 = src_view[top + k + 5];
+			const data_type *src_ptr6 = src_view[top + k + 6];
 
 			__m256 coeff0 = _mm256_broadcast_ss(&filter_row[k + 0]);
 			__m256 coeff1 = _mm256_broadcast_ss(&filter_row[k + 1]);
@@ -644,7 +650,7 @@ void filter_plane_fp_v(const EvaluatedFilter &filter, const ImageTile &src, cons
 			__m256 coeff5 = _mm256_broadcast_ss(&filter_row[k + 5]);
 			__m256 coeff6 = _mm256_broadcast_ss(&filter_row[k + 6]);
 
-			for (int j = 0; j < mod(src_width, 8); j += 8) {
+			for (int j = 0; j < mod(dst.width, 8); j += 8) {
 				__m256 x0, x1, x2, x3, x4, x5, x6;
 
 				__m256 accum0 = _mm256_setzero_ps();
@@ -686,57 +692,57 @@ void filter_plane_fp_v(const EvaluatedFilter &filter, const ImageTile &src, cons
 				policy.store_8(&dst_ptr[j], accum0);
 			}
 		}
-		filter_plane_v_scalar(filter, src, dst, i, i + 1, mod(src_width, 8), src_width, policy);
+		resize_tile_v_scalar(filter, src, dst, 0, i, mod(dst.width, 8), i + 1, dst.width, policy);
 	}
 }
 
 class ResizeImplH_AVX2 final : public ResizeImpl {
 public:
-	ResizeImplH_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter)
+	ResizeImplH_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter, true)
 	{}
 
-	void process_u16(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
 	{
 		if (m_filter.width() > 16)
-			filter_plane_u16_h<true>(m_filter, src, dst);
+			resize_tile_u16_h_avx2<true>(m_filter, src, dst, j);
 		else
-			filter_plane_u16_h<false>(m_filter, src, dst);
+			resize_tile_u16_h_avx2<false>(m_filter, src, dst, j);
 	}
 
-	void process_f16(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
 	{
 		if (m_filter.width() > 8)
-			filter_plane_fp_h<true>(m_filter, src, dst, VectorPolicy_F16{});
+			resize_tile_fp_h_avx2<true>(m_filter, src, dst, j, VectorPolicy_F16{});
 		else
-			filter_plane_fp_h<false>(m_filter, src, dst, VectorPolicy_F16{});
+			resize_tile_fp_h_avx2<false>(m_filter, src, dst, j, VectorPolicy_F16{});
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
 	{
 		if (m_filter.width() >= 8)
-			filter_plane_fp_h<true>(m_filter, src, dst, VectorPolicy_F32{});
+			resize_tile_fp_h_avx2<true>(m_filter, src, dst, j, VectorPolicy_F32{});
 		else
-			filter_plane_fp_h<false>(m_filter, src, dst, VectorPolicy_F32{});
+			resize_tile_fp_h_avx2<false>(m_filter, src, dst, j, VectorPolicy_F32{});
 	}
 };
 
 class ResizeImplV_AVX2 final : public ResizeImpl {
 public:
-	ResizeImplV_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter)
+	ResizeImplV_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter, false)
 	{}
 
-	void process_u16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
 	{
-		filter_plane_u16_v(m_filter, src, dst, (uint32_t *)tmp);
+		resize_tile_u16_v_avx2(m_filter, src, dst, i, (uint32_t *)tmp);
 	}
-	void process_f16(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
 	{
-		filter_plane_fp_v(m_filter, src, dst, VectorPolicy_F16{});
+		resize_tile_fp_v_avx2(m_filter, src, dst, i, VectorPolicy_F16{});
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
 	{
-		filter_plane_fp_v(m_filter, src, dst, VectorPolicy_F32{});
+		resize_tile_fp_v_avx2(m_filter, src, dst, i, VectorPolicy_F32{});
 	}
 };
 

@@ -115,7 +115,6 @@ public:
  */
 class EvaluatedFilter {
 	int m_width;
-	int m_height;
 	int m_stride;
 	int m_stride_i16;
 	AlignedVector<float> m_data;
@@ -139,11 +138,6 @@ public:
 	 * @return filter width
 	 */
 	int width() const;
-
-	/**
-	 * @return matrix height
-	 */
-	int height() const;
 
 	/**
 	 * @return distance betwen filter rows in floats

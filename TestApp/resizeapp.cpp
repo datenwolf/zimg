@@ -131,11 +131,11 @@ void execute(const resize::Resize &resize_h, const resize::Resize &resize_v, con
 			ImageTile tmp_tile{ tmp_frame.data(), tmp_stride * pxsize, tmp_width, tmp_height, default_pixel_format(type) };
 
 			if (hfirst) {
-				resize_h.process(src_tile, tmp_tile, tmp_buffer.data());
-				resize_v.process(tmp_tile, dst_tile, tmp_buffer.data());
+				resize_h.process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
+				resize_v.process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
 			} else {
-				resize_v.process(src_tile, tmp_tile, tmp_buffer.data());
-				resize_h.process(tmp_tile, dst_tile, tmp_buffer.data());
+				resize_v.process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
+				resize_h.process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
 			}
 		}
 	});
