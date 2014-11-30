@@ -483,54 +483,65 @@ void filter_plane_fp_v(const EvaluatedFilter &filter, const ImageTile &src, cons
 	}
 }
 
-class ResizeImplSSE2 : public ResizeImpl {
+class ResizeImplH_SSE2 : public ResizeImpl {
 public:
-	ResizeImplSSE2(const EvaluatedFilter &filter_h, const EvaluatedFilter &filter_v) : ResizeImpl(filter_h, filter_v)
+	ResizeImplH_SSE2(const EvaluatedFilter &filter) : ResizeImpl(filter)
 	{}
 
-	void process_u16_h(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_u16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
 	{
-		if (m_filter_h.width() > 8)
-			filter_plane_u16_h<true>(m_filter_h, src, dst);
+		if (m_filter.width() > 8)
+			filter_plane_u16_h<true>(m_filter, src, dst);
 		else
-			filter_plane_u16_h<false>(m_filter_h, src, dst);
+			filter_plane_u16_h<false>(m_filter, src, dst);
 	}
 
-	void process_u16_v(const ImageTile &src, const ImageTile &dst, void *tmp) const override
-	{
-		filter_plane_u16_v(m_filter_v, src, dst, (uint32_t *)tmp);
-	}
-
-	void process_f16_h(const ImageTile &, const ImageTile &, void *) const override
+	void process_f16(const ImageTile &, const ImageTile &, void *) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in SSE2 impl" };
 	}
 
-	void process_f16_v(const ImageTile &, const ImageTile &, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *) const override
+	{
+		if (m_filter.width() > 4)
+			filter_plane_fp_h<true>(m_filter, src, dst);
+		else
+			filter_plane_fp_h<false>(m_filter, src, dst);
+	}
+};
+
+class ResizeImplV_SSE2 : public ResizeImpl {
+public:
+	ResizeImplV_SSE2(const EvaluatedFilter &filter) : ResizeImpl(filter)
+	{}
+
+	void process_u16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	{
+		filter_plane_u16_v(m_filter, src, dst, (uint32_t *)tmp);
+	}
+
+	void process_f16(const ImageTile &, const ImageTile &, void *) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in SSE2 impl" };
 	}
 
-	void process_f32_h(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *) const override
 	{
-		if (m_filter_h.width() > 4)
-			filter_plane_fp_h<true>(m_filter_h, src, dst);
-		else
-			filter_plane_fp_h<false>(m_filter_h, src, dst);
-	}
-
-	void process_f32_v(const ImageTile &src, const ImageTile &dst, void *) const override
-	{
-		filter_plane_fp_v(m_filter_v, src, dst);
+		filter_plane_fp_v(m_filter, src, dst);
 	}
 };
 
 } // namespace
 
 
-ResizeImpl *create_resize_impl_sse2(const EvaluatedFilter &filter_h, const EvaluatedFilter &filter_v)
+ResizeImpl *create_resize_impl_h_sse2(const EvaluatedFilter &filter)
 {
-	return new ResizeImplSSE2{ filter_h, filter_v };
+	return new ResizeImplH_SSE2{ filter };
+}
+
+ResizeImpl *create_resize_impl_v_sse2(const EvaluatedFilter &filter)
+{
+	return new ResizeImplV_SSE2{ filter };
 }
 
 } // namespace resize

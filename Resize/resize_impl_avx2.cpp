@@ -690,57 +690,67 @@ void filter_plane_fp_v(const EvaluatedFilter &filter, const ImageTile &src, cons
 	}
 }
 
-class ResizeImplAVX2 final : public ResizeImpl {
+class ResizeImplH_AVX2 final : public ResizeImpl {
 public:
-	ResizeImplAVX2(const EvaluatedFilter &filter_h, const EvaluatedFilter &filter_v) : ResizeImpl(filter_h, filter_v)
+	ResizeImplH_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter)
 	{}
 
-	void process_u16_h(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_u16(const ImageTile &src, const ImageTile &dst, void *) const override
 	{
-		if (m_filter_h.width() > 16)
-			filter_plane_u16_h<true>(m_filter_h, src, dst);
+		if (m_filter.width() > 16)
+			filter_plane_u16_h<true>(m_filter, src, dst);
 		else
-			filter_plane_u16_h<false>(m_filter_h, src, dst);
+			filter_plane_u16_h<false>(m_filter, src, dst);
 	}
 
-	void process_u16_v(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_f16(const ImageTile &src, const ImageTile &dst, void *) const override
 	{
-		filter_plane_u16_v(m_filter_v, src, dst, (uint32_t *)tmp);
-	}
-
-	void process_f16_h(const ImageTile &src, const ImageTile &dst, void *) const override
-	{
-		if (m_filter_h.width() > 8)
-			filter_plane_fp_h<true>(m_filter_h, src, dst, VectorPolicy_F16{});
+		if (m_filter.width() > 8)
+			filter_plane_fp_h<true>(m_filter, src, dst, VectorPolicy_F16{});
 		else
-			filter_plane_fp_h<false>(m_filter_h, src, dst, VectorPolicy_F16{});
+			filter_plane_fp_h<false>(m_filter, src, dst, VectorPolicy_F16{});
 	}
 
-	void process_f16_v(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *) const override
 	{
-		filter_plane_fp_v(m_filter_v, src, dst, VectorPolicy_F16{});
-	}
-
-	void process_f32_h(const ImageTile &src, const ImageTile &dst, void *) const override
-	{
-		if (m_filter_h.width() >= 8)
-			filter_plane_fp_h<true>(m_filter_h, src, dst, VectorPolicy_F32{});
+		if (m_filter.width() >= 8)
+			filter_plane_fp_h<true>(m_filter, src, dst, VectorPolicy_F32{});
 		else
-			filter_plane_fp_h<false>(m_filter_h, src, dst, VectorPolicy_F32{});
+			filter_plane_fp_h<false>(m_filter, src, dst, VectorPolicy_F32{});
+	}
+};
+
+class ResizeImplV_AVX2 final : public ResizeImpl {
+public:
+	ResizeImplV_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter)
+	{}
+
+	void process_u16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	{
+		filter_plane_u16_v(m_filter, src, dst, (uint32_t *)tmp);
+	}
+	void process_f16(const ImageTile &src, const ImageTile &dst, void *) const override
+	{
+		filter_plane_fp_v(m_filter, src, dst, VectorPolicy_F16{});
 	}
 
-	void process_f32_v(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *) const override
 	{
-		filter_plane_fp_v(m_filter_v, src, dst, VectorPolicy_F32{});
+		filter_plane_fp_v(m_filter, src, dst, VectorPolicy_F32{});
 	}
 };
 
 } // namespace
 
 
-ResizeImpl *create_resize_impl_avx2(const EvaluatedFilter &filter_h, const EvaluatedFilter &filter_v)
+ResizeImpl *create_resize_impl_h_avx2(const EvaluatedFilter &filter)
 {
-	return new ResizeImplAVX2{ filter_h, filter_v };
+	return new ResizeImplH_AVX2{ filter };
+}
+
+ResizeImpl *create_resize_impl_v_avx2(const EvaluatedFilter &filter)
+{
+	return new ResizeImplV_AVX2{ filter };
 }
 
 } // namespace resize;

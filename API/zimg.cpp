@@ -2,6 +2,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <memory>
+#include "Common/align.h"
 #include "Common/cpuinfo.h"
 #include "Common/except.h"
 #include "Common/osdep.h"
@@ -192,7 +194,11 @@ struct zimg_depth_context {
 };
 
 struct zimg_resize_context {
-	resize::Resize p;
+	resize::Resize pass1;
+	resize::Resize pass2;
+	int src_width;
+	int tmp_width;
+	int tmp_height;
 };
 
 
@@ -369,18 +375,26 @@ zimg_resize_context *zimg_resize_create(int filter_type, int src_width, int src_
                                         double filter_param_a, double filter_param_b)
 {
 	zimg_resize_context *ret = nullptr;
-	resize::Filter *filter = nullptr;
 
 	try {
-		filter = create_filter(filter_type, filter_param_a, filter_param_b);
-		ret = new zimg_resize_context{ { *filter, src_width, src_height, dst_width, dst_height, shift_w, shift_h, subwidth, subheight, g_cpu_type } };
+		std::unique_ptr<resize::Filter> filter{ create_filter(filter_type, filter_param_a, filter_param_b) };
+		resize::Resize resize_h{ *filter, true, src_width, dst_width, shift_w, subwidth, g_cpu_type };
+		resize::Resize resize_v{ *filter, false, src_height, dst_height, shift_h, subheight, g_cpu_type };
+
+		bool horizontal_first = resize::resize_horizontal_first((double)dst_width / src_width, (double)dst_height / src_height);
+
+		const resize::Resize &pass1 = horizontal_first ? resize_h : resize_v;
+		const resize::Resize &pass2 = horizontal_first ? resize_v : resize_h;
+		int tmp_width = horizontal_first ? dst_width : src_width;
+		int tmp_height = horizontal_first ? src_height : dst_height;
+
+		ret = new zimg_resize_context{ pass1, pass2, src_width, tmp_width, tmp_height };
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	} catch (const std::bad_alloc &) {
 		handle_bad_alloc();
 	}
 
-	delete filter;
 	return ret;
 }
 
@@ -390,7 +404,12 @@ size_t zimg_resize_tmp_size(zimg_resize_context *ctx, int pixel_type)
 
 	try {
 		PixelType type = get_pixel_type(pixel_type);
-		ret = ctx->p.tmp_size(type) * pixel_size(type);
+
+		ret += ctx->pass1.tmp_size(type, ctx->src_width) * pixel_size(type);
+		ret += ctx->pass2.tmp_size(type, ctx->tmp_width) * pixel_size(type);
+
+		// Temporary frame.
+		ret += (size_t)align(ctx->tmp_width * pixel_size(type), ALIGNMENT) * ctx->tmp_height;
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}
@@ -406,11 +425,16 @@ int zimg_resize_process(zimg_resize_context *ctx, const void *src, void *dst, vo
 
 	try {
 		PixelType type = get_pixel_type(pixel_type);
+		int tmp_stride = align(ctx->tmp_width * pixel_size(type), ALIGNMENT);
 
 		ImageTile src_tile{ (void *)src, src_stride, src_width, src_height, default_pixel_format(type) };
 		ImageTile dst_tile{ (void *)dst, dst_stride, dst_width, dst_height, default_pixel_format(type) };
+		ImageTile tmp_tile{ tmp, tmp_stride, ctx->tmp_width, ctx->tmp_height, default_pixel_format(type) };
 
-		ctx->p.process(src_tile, dst_tile, tmp);
+		tmp = (char *)tmp + (size_t)tmp_stride * ctx->tmp_height;
+
+		ctx->pass1.process(src_tile, tmp_tile, tmp);
+		ctx->pass2.process(tmp_tile, dst_tile, tmp);
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}

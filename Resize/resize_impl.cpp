@@ -9,42 +9,48 @@ namespace resize {;
 
 namespace {;
 
-class ResizeImplC final : public ResizeImpl {
+class ResizeImplH_C final : public ResizeImpl {
 public:
-	ResizeImplC(const EvaluatedFilter &filter_h, const EvaluatedFilter &filter_v) : ResizeImpl(filter_h, filter_v)
+	ResizeImplH_C(const EvaluatedFilter &filter) : ResizeImpl(filter)
 	{}
 
-	void process_u16_h(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_u16(const ImageTile &src, const ImageTile &dst, void *) const override
 	{
-		const EvaluatedFilter &filter = m_filter_h;
+		const EvaluatedFilter &filter = m_filter;
 		filter_plane_h_scalar(filter, src, dst, 0, src.height, 0, filter.height(), ScalarPolicy_U16{});
 	}
 
-	void process_u16_v(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f16(const ImageTile &, const ImageTile &, void *) const override
 	{
-		const EvaluatedFilter &filter = m_filter_v;
+		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
+	}
+
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *) const override
+	{
+		const EvaluatedFilter &filter = m_filter;
+		filter_plane_h_scalar(filter, src, dst, 0, src.height, 0, filter.height(), ScalarPolicy_F32{});
+	}
+};
+
+class ResizeImplV_C final : public ResizeImpl {
+public:
+	ResizeImplV_C(const EvaluatedFilter &filter) : ResizeImpl(filter)
+	{}
+
+	void process_u16(const ImageTile &src, const ImageTile &dst, void *) const override
+	{
+		const EvaluatedFilter &filter = m_filter;
 		filter_plane_v_scalar(filter, src, dst, 0, filter.height(), 0, src.width, ScalarPolicy_U16{});
 	}
 
-	void process_f16_h(const ImageTile &, const ImageTile &, void *) const override
+	void process_f16(const ImageTile &, const ImageTile &, void *) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
 	}
 
-	void process_f16_v(const ImageTile &, const ImageTile &, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *) const override
 	{
-		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
-	}
-
-	void process_f32_h(const ImageTile &src, const ImageTile &dst, void *) const override
-	{
-		const EvaluatedFilter &filter = m_filter_h;
-		filter_plane_h_scalar(filter, src, dst, 0, src.height, 0, filter.height(), ScalarPolicy_F32{});
-	}
-
-	void process_f32_v(const ImageTile &src, const ImageTile &dst, void *) const override
-	{
-		const EvaluatedFilter &filter = m_filter_v;
+		const EvaluatedFilter &filter = m_filter;
 		filter_plane_v_scalar(filter, src, dst, 0, filter.height(), 0, src.width, ScalarPolicy_F32{});
 	}
 };
@@ -52,9 +58,7 @@ public:
 } // namespace
 
 
-ResizeImpl::ResizeImpl(const EvaluatedFilter &filter_h, const EvaluatedFilter &filter_v) :
-	m_filter_h{ filter_h },
-	m_filter_v{ filter_v }
+ResizeImpl::ResizeImpl(const EvaluatedFilter &filter) : m_filter{ filter } 
 {
 }
 
@@ -62,24 +66,16 @@ ResizeImpl::~ResizeImpl()
 {
 }
 
-ResizeImpl *create_resize_impl(const Filter &f, int src_width, int src_height, int dst_width, int dst_height,
-                               double shift_w, double shift_h, double subwidth, double subheight, CPUClass cpu)
+ResizeImpl *create_resize_impl(const Filter &f, bool horizontal, int src_dim, int dst_dim, double shift, double width, CPUClass cpu)
 {
+	EvaluatedFilter filter = compute_filter(f, src_dim, dst_dim, shift, width);
 	ResizeImpl *ret = nullptr;
 
-	EvaluatedFilter filter_h;
-	EvaluatedFilter filter_v;
-
-	if (src_width != dst_width || shift_w != 0.0 || subwidth != src_width)
-		filter_h = compute_filter(f, src_width, dst_width, shift_w, subwidth);
-	if (src_height != dst_height || shift_h != 0.0 || subheight != src_height)
-		filter_v = compute_filter(f, src_height, dst_height, shift_h, subheight);
-
 #ifdef ZIMG_X86
-	ret = create_resize_impl_x86(filter_h, filter_v, cpu);
+	ret = create_resize_impl_x86(filter, horizontal, cpu);
 #endif
 	if (!ret)
-		ret = new ResizeImplC(filter_h, filter_v);
+		ret = horizontal ? (ResizeImpl *)new ResizeImplH_C(filter) : (ResizeImpl *)new ResizeImplV_C(filter);
 
 	return ret;
 }

@@ -5,6 +5,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include "Common/align.h"
 #include "Common/cpuinfo.h"
 #include "Common/pixel.h"
 #include "Common/tile.h"
@@ -88,14 +89,37 @@ void usage()
 	std::cout << "    --pixtype           select pixel format\n";
 }
 
-void execute(const resize::Resize &resize, const Frame &in, Frame &out, int times, PixelType type)
+void execute(const resize::Resize &resize_h, const resize::Resize &resize_v, const Frame &in, Frame &out, int times, PixelType type)
 {
 	int pxsize = pixel_size(type);
 	int planes = in.planes();
 
 	Frame src{ in.width(), in.height(), pxsize, planes };
 	Frame dst{ out.width(), out.height(), pxsize, planes };
-	auto tmp = allocate_buffer(resize.tmp_size(type), type);
+
+	bool hfirst = resize::resize_horizontal_first((double)out.width() / in.width(), (double)out.height() / in.height());
+
+	int tmp_width;
+	int tmp_height;
+	int tmp_stride;
+	AlignedVector<char> tmp_frame;
+	AlignedVector<char> tmp_buffer;
+
+	if (hfirst) {
+		tmp_width = out.width();
+		tmp_height = in.height();
+		tmp_stride = align(tmp_width, ALIGNMENT / pxsize);
+
+		tmp_frame = allocate_buffer((size_t)tmp_stride * tmp_height, type);
+		tmp_buffer = allocate_buffer(resize_v.tmp_size(type, tmp_width), type);
+	} else {
+		tmp_width = in.width();
+		tmp_height = out.height();
+		tmp_stride = align(tmp_width, ALIGNMENT / pxsize);
+
+		tmp_frame = allocate_buffer((size_t)tmp_stride * tmp_height, type);
+		tmp_buffer = allocate_buffer(resize_v.tmp_size(type, in.width()), type);
+	}
 
 	convert_frame(in, src, PixelType::BYTE, type, true, false);
 
@@ -104,8 +128,15 @@ void execute(const resize::Resize &resize, const Frame &in, Frame &out, int time
 		for (int p = 0; p < planes; ++p) {
 			ImageTile src_tile{ src.data(p), src.stride() * pxsize, src.width(), src.height(), default_pixel_format(type) };
 			ImageTile dst_tile{ dst.data(p), dst.stride() * pxsize, dst.width(), dst.height(), default_pixel_format(type) };
+			ImageTile tmp_tile{ tmp_frame.data(), tmp_stride * pxsize, tmp_width, tmp_height, default_pixel_format(type) };
 
-			resize.process(src_tile, dst_tile, tmp.data());
+			if (hfirst) {
+				resize_h.process(src_tile, tmp_tile, tmp_buffer.data());
+				resize_v.process(tmp_tile, dst_tile, tmp_buffer.data());
+			} else {
+				resize_v.process(src_tile, tmp_tile, tmp_buffer.data());
+				resize_h.process(tmp_tile, dst_tile, tmp_buffer.data());
+			}
 		}
 	});
 
@@ -148,9 +179,10 @@ int resize_main(int argc, const char **argv)
 	if (!c.filter)
 		c.filter.reset(new resize::BilinearFilter{});
 
-	resize::Resize resize{ *c.filter, in.width(), in.height(), c.width, c.height, c.shift_w, c.shift_h, c.sub_w, c.sub_h, c.cpu };
+	resize::Resize resize_h{ *c.filter, true, in.width(), c.width, c.shift_w, c.sub_w, c.cpu };
+	resize::Resize resize_v{ *c.filter, false, in.height(), c.height, c.shift_h, c.sub_h, c.cpu };
 
-	execute(resize, in, out, c.times, c.pixtype);
+	execute(resize_h, resize_v, in, out, c.times, c.pixtype);
 	write_frame_bmp(out, c.outfile);
 
 	return 0;

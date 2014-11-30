@@ -14,16 +14,20 @@ namespace resize {;
 class EvaluatedFilter;
 class ResizeImpl;
 
-ResizeImpl *create_resize_impl_sse2(const EvaluatedFilter &filter_h, const EvaluatedFilter &filter_v);
+ResizeImpl *create_resize_impl_h_sse2(const EvaluatedFilter &filter);
 
-ResizeImpl *create_resize_impl_avx2(const EvaluatedFilter &filter_h, const EvaluatedFilter &filter_v);
+ResizeImpl *create_resize_impl_h_avx2(const EvaluatedFilter &filter);
+
+ResizeImpl *create_resize_impl_v_sse2(const EvaluatedFilter &filter);
+
+ResizeImpl *create_resize_impl_v_avx2(const EvaluatedFilter &filter);
 
 /**
  * Create an appropriate x86 optimized ResizeImpl for the given CPU.
  *
  * @see create_resize_impl
  */
-ResizeImpl *create_resize_impl_x86(const EvaluatedFilter &filter_h, const EvaluatedFilter &filter_v, CPUClass cpu);
+ResizeImpl *create_resize_impl_x86(const EvaluatedFilter &filter, bool horizontal, CPUClass cpu);
 
 } // namespace resize
 } // namespace zimg

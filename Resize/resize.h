@@ -24,19 +24,10 @@ class ResizeImpl;
  * Each instance is applicable only for its given set of resizing parameters.
  */
 class Resize {
-	int m_src_width;
-	int m_src_height;
-	int m_dst_width;
-	int m_dst_height;
-	bool m_skip_h;
-	bool m_skip_v;
 	std::shared_ptr<ResizeImpl> m_impl;
+	bool m_horizontal;
 
-	size_t max_frame_size(PixelType type) const;
-
-	void invoke_impl_h(const ImageTile &src, const ImageTile &dst, void *tmp) const;
-
-	void invoke_impl_v(const ImageTile &src, const ImageTile &dst, void *tmp) const;
+	void invoke_impl(const ImageTile &src, const ImageTile &dst, void *tmp) const;
 public:
 	/**
 	 * Initialize a null context. Cannot be used for execution.
@@ -47,28 +38,25 @@ public:
 	 * Initialize a context to apply a given resizing filter.
 	 *
 	 * @param f filter
-	 * @param src_width width of input image
-	 * @param src_height height of input image
-	 * @param dst_width width of output image
-	 * @param dst_height height of output image
-	 * @param shift_w horizontal shift in units of source pixels
-	 * @param shift_h vertical shift in units of source pixels
-	 * @param subwidth active horizontal subwindow in units of source pixels
-	 * @param subheight active vertical subwindow in units of source pixels
+	 * @param horizontal whether resizing is to be done horizontally or vertically
+	 * @param src_dim input dimension
+	 * @param dst_dim output dimension
+	 * @param shift center shift in units of source pixels
+	 * @param width active subwindow in units of source pixels
 	 * @param cpu create kernel optimized for given cpu
 	 * @throws ZimgIllegalArgument on unsupported parameter combinations
 	 * @throws ZimgOutOfMemory if out of memory
 	 */
-	Resize(const Filter &f, int src_width, int src_height, int dst_width, int dst_height,
-	       double shift_w, double shift_h, double subwidth, double subheight, CPUClass cpu);
+	Resize(const Filter &f, bool horizontal, int src_dim, int dst_dim, double shift, double width, CPUClass cpu);
 
 	/**
 	 * Get the size of the temporary buffer required by the filter.
 	 *
 	 * @param type pixel type to process
+	 * @param width input width
 	 * @return the size of temporary buffer in units of pixels
 	 */
-	size_t tmp_size(PixelType type) const;
+	size_t tmp_size(PixelType type, int width) const;
 
 	/**
 	 * Process an image. The input and output pixel formats must match.
@@ -81,6 +69,15 @@ public:
 	 */
 	void process(const ImageTile &src, const ImageTile &dst, void *tmp) const;
 };
+
+/**
+ * Check if resizing horizontally or vertically first is more efficient.
+ *
+ * @param xscale horizontal resizing ratio
+ * @param yscale vertical resizing ratio
+ * @return true if resizing horizontally first is more efficient
+ */
+bool resize_horizontal_first(double xscale, double yscale);
 
 } // namespace resize
 } // namespace zimg
