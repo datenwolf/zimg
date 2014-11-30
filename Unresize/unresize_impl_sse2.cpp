@@ -318,42 +318,52 @@ void filter_plane_v_sse2(const BilinearContext &ctx, const ImageTile &src, const
 	}
 }
 
-class UnresizeImplSSE2 : public UnresizeImpl {
+class UnresizeImplH_SSE2 : public UnresizeImpl {
 public:
-	UnresizeImplSSE2(const BilinearContext &hcontext, const BilinearContext &vcontext) : UnresizeImpl(hcontext, vcontext)
+	UnresizeImplH_SSE2(const BilinearContext context) : UnresizeImpl(context)
 	{}
 
-	void process_f16_h(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in SSE2 impl" };
 	}
 
-	void process_f16_v(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *tmp) const override
 	{
-		throw ZimgUnsupportedError{ "f16 not supported in SSE2 impl" };
-	}
-
-	void process_f32_h(const ImageTile &src, const ImageTile &dst, void *tmp) const override
-	{
-		if (m_hcontext.matrix_row_size > 4)
-			filter_plane_h_sse2<true>(m_hcontext, src, dst, (float *)tmp);
+		if (m_context.matrix_row_size > 4)
+			filter_plane_h_sse2<true>(m_context, src, dst, (float *)tmp);
 		else
-			filter_plane_h_sse2<false>(m_hcontext, src, dst, (float *)tmp);
-	}
-
-	void process_f32_v(const ImageTile &src, const ImageTile &dst, void *) const override
-	{
-		filter_plane_v_sse2(m_vcontext, src, dst);
+			filter_plane_h_sse2<false>(m_context, src, dst, (float *)tmp);
 	}
 };
 
+class UnresizeImplV_SSE2 : public UnresizeImpl {
+public:
+	UnresizeImplV_SSE2(const BilinearContext context) : UnresizeImpl(context)
+	{}
+
+	void process_f16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	{
+		throw ZimgUnsupportedError{ "f16 not supported in SSE2 impl" };
+	}
+
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	{
+		filter_plane_v_sse2(m_context, src, dst);
+	}
+};
 
 } // namespace
 
 
-UnresizeImpl *create_unresize_impl_sse2(const BilinearContext &hcontext, const BilinearContext &vcontext)
+UnresizeImpl *create_unresize_impl_h_sse2(const BilinearContext &context)
 {
-	return new UnresizeImplSSE2{ hcontext, vcontext };
+	return new UnresizeImplH_SSE2{ context };
+}
+
+UnresizeImpl *create_unresize_impl_v_sse2(const BilinearContext &context)
+{
+	return new UnresizeImplV_SSE2{ context };
 }
 
 } // namespace unresize

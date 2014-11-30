@@ -48,14 +48,37 @@ void usage()
 	std::cout << "    --pixtype           select pixel format\n";
 }
 
-void execute(const unresize::Unresize &unresize, const Frame &in, Frame &out, int times, PixelType type)
+void execute(const unresize::Unresize &unresize_h, const unresize::Unresize &unresize_v, Frame &in, Frame &out, int times, PixelType type)
 {
 	int pxsize = pixel_size(type);
 	int planes = in.planes();
 
 	Frame src{ in.width(), in.height(), pxsize, planes };
 	Frame dst{ out.width(), out.height(), pxsize, planes };
-	auto tmp = allocate_buffer(unresize.tmp_size(type), type);
+
+	bool hfirst = unresize::unresize_horizontal_first((double)out.width() / in.width(), (double)out.height() / in.height());
+
+	int tmp_width;
+	int tmp_height;
+	int tmp_stride;
+	AlignedVector<char> tmp_frame;
+	AlignedVector<char> tmp_buffer;
+
+	if (hfirst) {
+		tmp_width = out.width();
+		tmp_height = in.height();
+		tmp_stride = align(tmp_width, ALIGNMENT / pxsize);
+
+		tmp_frame = allocate_buffer((size_t)tmp_stride * tmp_height, type);
+		tmp_buffer = allocate_buffer(unresize_h.tmp_size(type), type);
+	} else {
+		tmp_width = in.width();
+		tmp_height = out.height();
+		tmp_stride = align(tmp_width, ALIGNMENT / pxsize);
+
+		tmp_frame = allocate_buffer((size_t)tmp_stride * tmp_height, type);
+		tmp_buffer = allocate_buffer(unresize_h.tmp_size(type), type);
+	}
 
 	convert_frame(in, src, PixelType::BYTE, type, true, false);
 
@@ -64,8 +87,15 @@ void execute(const unresize::Unresize &unresize, const Frame &in, Frame &out, in
 		for (int p = 0; p < src.planes(); ++p) {
 			ImageTile src_tile{ src.data(p), src.stride() * pxsize, src.width(), src.height(), default_pixel_format(type) };
 			ImageTile dst_tile{ dst.data(p), dst.stride() * pxsize, dst.width(), dst.height(), default_pixel_format(type) };
+			ImageTile tmp_tile{ tmp_frame.data(), tmp_stride * pxsize, tmp_width, tmp_height, default_pixel_format(type) };
 
-			unresize.process(src_tile, dst_tile, tmp.data());
+			if (hfirst) {
+				unresize_h.process(src_tile, tmp_tile, tmp_buffer.data());
+				unresize_v.process(tmp_tile, dst_tile, tmp_buffer.data());
+			} else {
+				unresize_v.process(src_tile, tmp_tile, tmp_buffer.data());
+				unresize_h.process(tmp_tile, dst_tile, tmp_buffer.data());
+			}
 		}
 	});
 
@@ -99,8 +129,15 @@ int unresize_main(int argc, const char **argv)
 	Frame in{ read_frame_bmp(c.infile) };
 	Frame out{ c.width, c.height, 1, in.planes() };
 
-	unresize::Unresize unresize{ in.width(), in.height(), out.width(), out.height(), (float)c.shift_w, (float)c.shift_h, c.cpu };
-	execute(unresize, in, out, c.times, c.pixtype);
+	unresize::Unresize unresize_h;
+	unresize::Unresize unresize_v;
+	
+	if (in.width() != out.width())
+		unresize_h = unresize::Unresize{ true, in.width(), out.width(), c.shift_w, c.cpu };
+	if (in.height() != out.height())
+		unresize_v = unresize::Unresize{ false, in.height(), out.height(), c.shift_h, c.cpu };
+
+	execute(unresize_h, unresize_v, in, out, c.times, c.pixtype);
 	write_frame_bmp(out, c.outfile);
 
 	return 0;

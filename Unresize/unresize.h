@@ -98,17 +98,9 @@ class UnresizeImpl;
  * and "output" refers to the unresized image.
  */
 class Unresize {
-	int m_src_width;
-	int m_src_height;
-	int m_dst_width;
-	int m_dst_height;
 	std::shared_ptr<UnresizeImpl> m_impl;
-
-	size_t max_frame_size(PixelType type) const;
-
-	void invoke_impl_h(const ImageTile &src, const ImageTile &dst, void *tmp) const;
-
-	void invoke_impl_v(const ImageTile &src, const ImageTile &dst, void *tmp) const;
+	int m_dst_dim;
+	bool m_horizontal;
 public:
 	/**
 	 * Initialize a null context. Cannot be used for execution.
@@ -118,17 +110,15 @@ public:
 	/**
 	 * Initialize a context to unresize a given bilinear resampling.
 	 *
-	 * @param dst_width output image width
-	 * @param dst_height output image height
-	 * @param src_width input image width
-	 * @param src_height input image height
-	 * @param shift_w horizontal center shift relative to upsampled image
-	 * @param shift_h vertical center shift relative to upsampled image
+	 * @param horizontal whether resizing is to be done horizontally or vertically
+	 * @param src_dim input dimension
+	 * @param dst_dim output dimension
+	 * @param shift center shift in units of source pixels
 	 * @param cpu create kernel optimized for given cpu
 	 * @throws ZimgIllegalArgument on invalid dimensions
 	 * @throws ZimgOutOfMemory if out of memory
 	 */
-	Unresize(int src_width, int src_height, int dst_width, int dst_height, float shift_w, float shift_h, CPUClass cpu);
+	Unresize(bool horizontal, int src_dim, int dst_dim, double shift, CPUClass cpu);
 
 	/**
 	 * Destroy context.
@@ -154,6 +144,15 @@ public:
 	 */
 	void process(const ImageTile &src, const ImageTile &dst, void *tmp) const;
 };
+
+/**
+ * Check if unresizing horizontally or vertically first is more efficient.
+ *
+ * @param xscale horizontal unresizing ratio
+ * @param yscale vertical unresizing ratio
+ * @return true if unresizing horizontally first is more efficient
+ */
+bool unresize_horizontal_first(double xscale, double yscale);
 
 } // namespace unresize
 } // namespace zimg

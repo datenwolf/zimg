@@ -65,7 +65,7 @@ struct BilinearContext {
  * @param shift center shift relative to upscaled vector
  * @return an initialized context
  */
-BilinearContext create_bilinear_context(int in, int out, float shift);
+BilinearContext create_bilinear_context(int in, int out, double shift);
 
 } // namespace unresize
 } // namespace zimg

@@ -11,36 +11,42 @@ namespace unresize {;
 
 namespace {;
 
-class UnresizeImplC : public UnresizeImpl {
+class UnresizeImplH_C : public UnresizeImpl {
 public:
-	UnresizeImplC(const BilinearContext &hcontext, const BilinearContext &vcontext) : UnresizeImpl(hcontext, vcontext)
+	UnresizeImplH_C(const BilinearContext &context) : UnresizeImpl(context)
 	{}
 
-	void process_f16_h(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_f16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
 	}
 
-	void process_f16_v(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	{
+		for (int i = 0; i < dst.height; ++i) {
+			filter_scanline_h_forward(m_context, src, (float *)tmp, i, 0, m_context.dst_width, ScalarPolicy_F32{});
+			filter_scanline_h_back(m_context, (const float *)tmp, dst, i, m_context.dst_width, 0, ScalarPolicy_F32{});
+		}
+	}
+};
+
+class UnresizeImplV_C : public UnresizeImpl {
+public:
+	UnresizeImplV_C(const BilinearContext &context) : UnresizeImpl(context)
+	{}
+
+	void process_f16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
 	}
 
-	void process_f32_h(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *tmp) const override
 	{
-		for (int i = 0; i < src.height; ++i) {
-			filter_scanline_h_forward(m_hcontext, src, (float *)tmp, i, 0, m_hcontext.dst_width, ScalarPolicy_F32{});
-			filter_scanline_h_back(m_hcontext, (const float *)tmp, dst, i, m_hcontext.dst_width, 0, ScalarPolicy_F32{});
+		for (int i = 0; i < m_context.dst_width; ++i) {
+			filter_scanline_v_forward(m_context, src, dst, i, 0, src.width, ScalarPolicy_F32{});
 		}
-	}
-
-	void process_f32_v(const ImageTile &src, const ImageTile &dst, void *tmp) const override
-	{
-		for (int i = 0; i < m_vcontext.dst_width; ++i) {
-			filter_scanline_v_forward(m_vcontext, src, dst, i, 0, src.width, ScalarPolicy_F32{});
-		}
-		for (int i = m_vcontext.dst_width; i > 0; --i) {
-			filter_scanline_v_back(m_vcontext, dst, i, 0, src.width, ScalarPolicy_F32{});
+		for (int i = m_context.dst_width; i > 0; --i) {
+			filter_scanline_v_back(m_context, dst, i, 0, src.width, ScalarPolicy_F32{});
 		}
 	}
 };
@@ -48,41 +54,32 @@ public:
 } // namespace
 
 
-UnresizeImpl::UnresizeImpl(const BilinearContext &hcontext, const BilinearContext &vcontext) :
-	m_hcontext(hcontext),
-	m_vcontext(vcontext)
-{}
+UnresizeImpl::UnresizeImpl(const BilinearContext &context) :
+	m_context(context)
+{
+}
 
 UnresizeImpl::~UnresizeImpl()
-{}
-
-UnresizeImpl *create_unresize_impl(int src_width, int src_height, int dst_width, int dst_height, float shift_w, float shift_h, CPUClass cpu)
 {
-	BilinearContext hcontext;
+}
+
+UnresizeImpl *create_unresize_impl(bool horizontal, int src_dim, int dst_dim, double shift, CPUClass cpu)
+{
+	BilinearContext context;
 	BilinearContext vcontext;
 	UnresizeImpl *ret = nullptr;
 
-	if (dst_width == src_width && dst_height == src_height)
+	if (dst_dim == src_dim)
 		throw ZimgIllegalArgument("input dimensions must differ from output");
-	if (dst_width > src_width || dst_height > src_height)
+	if (dst_dim > src_dim)
 		throw ZimgIllegalArgument("input dimension must be greater than output");
 
-	if (dst_width != src_width)
-		hcontext = create_bilinear_context(dst_width, src_width, shift_w);
-	else
-		hcontext.matrix_row_size = 0;
-
-	if (dst_height != src_height)
-		vcontext = create_bilinear_context(dst_height, src_height, shift_h);
-	else
-		vcontext.matrix_row_size = 0;
-
+	context = create_bilinear_context(dst_dim, src_dim, shift);
 #ifdef ZIMG_X86
-	ret = create_unresize_impl_x86(hcontext, vcontext, cpu);
+	ret = create_unresize_impl_x86(context, horizontal, cpu);
 #endif
-
 	if (!ret)
-		ret = new UnresizeImplC(hcontext, vcontext);
+		ret = horizontal ? (UnresizeImpl *)new UnresizeImplH_C{ context } : (UnresizeImpl *)new UnresizeImplV_C(context);
 
 	return ret;
 }

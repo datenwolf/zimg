@@ -14,15 +14,18 @@ namespace unresize {;
 class UnresizeImpl;
 struct BilinearContext;
 
-UnresizeImpl *create_unresize_impl_sse2(const BilinearContext &hcontext, const BilinearContext &vcontext);
-UnresizeImpl *create_unresize_impl_avx2(const BilinearContext &hcontext, const BilinearContext &vcontext);
+UnresizeImpl *create_unresize_impl_h_sse2(const BilinearContext &context);
+UnresizeImpl *create_unresize_impl_h_avx2(const BilinearContext &context);
+
+UnresizeImpl *create_unresize_impl_v_sse2(const BilinearContext &context);
+UnresizeImpl *create_unresize_impl_v_avx2(const BilinearContext &context);
 
 /**
-* Create an appropriate x86 optimized ResizeImpl for the given CPU.
-*
-* @see create_resize_impl
-*/
-UnresizeImpl *create_unresize_impl_x86(const BilinearContext &hcontext, const BilinearContext &vcontext, CPUClass cpu);
+ * Create an appropriate x86 optimized ResizeImpl for the given CPU.
+ *
+ * @see create_resize_impl
+ */
+UnresizeImpl *create_unresize_impl_x86(const BilinearContext &context, bool horizontal, CPUClass cpu);
 
 } // namespace unresize
 } // namespace zimg

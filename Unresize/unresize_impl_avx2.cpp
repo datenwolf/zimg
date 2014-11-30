@@ -447,44 +447,55 @@ void filter_plane_v_avx2(const BilinearContext &ctx, const ImageTile &src, const
 	}
 }
 
-class UnresizeImplAVX2 : public UnresizeImpl {
+class UnresizeImplH_AVX2 : public UnresizeImpl {
 public:
-	UnresizeImplAVX2(const BilinearContext &hcontext, const BilinearContext &vcontext) : UnresizeImpl(hcontext, vcontext)
+	UnresizeImplH_AVX2(const BilinearContext &context) : UnresizeImpl(context)
 	{}
 
-	void process_f16_h(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_f16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
 	{
-		if (m_hcontext.matrix_row_size > 8)
-			filter_plane_h_avx2<true>(m_hcontext, src, dst, (uint16_t *)tmp, VectorPolicy_F16{});
+		if (m_context.matrix_row_size > 8)
+			filter_plane_h_avx2<true>(m_context, src, dst, (uint16_t *)tmp, VectorPolicy_F16{});
 		else
-			filter_plane_h_avx2<false>(m_hcontext, src, dst, (uint16_t *)tmp, VectorPolicy_F16{});
+			filter_plane_h_avx2<false>(m_context, src, dst, (uint16_t *)tmp, VectorPolicy_F16{});
 	}
 
-	void process_f16_v(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *tmp) const override
 	{
-		filter_plane_v_avx2(m_vcontext, src, dst, VectorPolicy_F16{});
-	}
-
-	void process_f32_h(const ImageTile &src, const ImageTile &dst, void *tmp) const override
-	{
-		if (m_hcontext.matrix_row_size > 8)
-			filter_plane_h_avx2<true>(m_hcontext, src, dst, (float *)tmp, VectorPolicy_F32{});
+		if (m_context.matrix_row_size > 8)
+			filter_plane_h_avx2<true>(m_context, src, dst, (float *)tmp, VectorPolicy_F32{});
 		else
-			filter_plane_h_avx2<false>(m_hcontext, src, dst, (float *)tmp, VectorPolicy_F32{});
+			filter_plane_h_avx2<false>(m_context, src, dst, (float *)tmp, VectorPolicy_F32{});
+	}
+};
+
+class UnresizeImplV_AVX2 : public UnresizeImpl {
+public:
+	UnresizeImplV_AVX2(const BilinearContext &context) : UnresizeImpl(context)
+	{}
+
+	void process_f16(const ImageTile &src, const ImageTile &dst, void *) const override
+	{
+		filter_plane_v_avx2(m_context, src, dst, VectorPolicy_F16{});
 	}
 
-	void process_f32_v(const ImageTile &src, const ImageTile &dst, void *) const override
+	void process_f32(const ImageTile &src, const ImageTile &dst, void *) const override
 	{
-		filter_plane_v_avx2(m_vcontext, src, dst, VectorPolicy_F32{});
+		filter_plane_v_avx2(m_context, src, dst, VectorPolicy_F32{});
 	}
 };
 
 } // namespace
 
 
-UnresizeImpl *create_unresize_impl_avx2(const BilinearContext &hcontext, const BilinearContext &vcontext)
+UnresizeImpl *create_unresize_impl_h_avx2(const BilinearContext &context)
 {
-	return new UnresizeImplAVX2{ hcontext, vcontext };
+	return new UnresizeImplH_AVX2{ context };
+}
+
+UnresizeImpl *create_unresize_impl_v_avx2(const BilinearContext &context)
+{
+	return new UnresizeImplV_AVX2{ context };
 }
 
 } // namespace unresize

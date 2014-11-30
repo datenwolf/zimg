@@ -3,7 +3,6 @@
 #ifndef ZIMG_UNRESIZE_UNRESIZE_IMPL_H_
 #define ZIMG_UNRESIZE_UNRESIZE_IMPL_H_
 
-#include <cstdint>
 #include "Common/osdep.h"
 #include "bilinear.h"
 
@@ -125,35 +124,25 @@ inline FORCE_INLINE void filter_scanline_v_back(const BilinearContext &ctx, cons
 class UnresizeImpl {
 protected:
 	/**
-	 * Coefficients for the horizontal pass.
+	 * Filter coefficients.
 	 */
-	BilinearContext m_hcontext;
-
-	/**
-	 * Coefficients for the vertical pass.
-	 */
-	BilinearContext m_vcontext;
+	BilinearContext m_context;
 
 	/**
 	 * Initialize the implementation with the given coefficients.
 	 *
-	 * @param hcontext horizontal coefficients
-	 * @param vcontext vertical coefficients
+	 * @param context coefficients
 	 */
-	UnresizeImpl(const BilinearContext &hcontext, const BilinearContext &vcontext);
+	UnresizeImpl(const BilinearContext &context);
 public:
 	/**
 	 * Destroy implementation
 	 */
 	virtual ~UnresizeImpl() = 0;
 
-	virtual void process_f16_h(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
+	virtual void process_f16(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 
-	virtual void process_f16_v(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
-
-	virtual void process_f32_h(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
-
-	virtual void process_f32_v(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
+	virtual void process_f32(const ImageTile &src, const ImageTile &dst, void *tmp) const = 0;
 };
 
 /**
@@ -161,7 +150,7 @@ public:
  *
  * @see Unresize::Unresize
  */
-UnresizeImpl *create_unresize_impl(int src_width, int src_height, int dst_width, int dst_height, float shift_w, float shift_h, CPUClass cpu);
+UnresizeImpl *create_unresize_impl(bool horizontal, int src_dim, int dst_dim, double shift, CPUClass cpu);
 
 } // namespace unresize
 } // namespace zimg

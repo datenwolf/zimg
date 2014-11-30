@@ -102,7 +102,7 @@ RowMatrix<double> bilinear_weights(int in, int out, double shift)
 } // namespace
 
 
-BilinearContext create_bilinear_context(int in, int out, float shift)
+BilinearContext create_bilinear_context(int in, int out, double shift)
 {
 	BilinearContext ctx;
 
