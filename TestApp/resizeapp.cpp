@@ -89,7 +89,7 @@ void usage()
 	std::cout << "    --pixtype           select pixel format\n";
 }
 
-void execute(const resize::Resize &resize_h, const resize::Resize &resize_v, const Frame &in, Frame &out, int times, PixelType type)
+void execute(const resize::Resize *resize_h, const resize::Resize *resize_v, const Frame &in, Frame &out, int times, PixelType type)
 {
 	int pxsize = pixel_size(type);
 	int planes = in.planes();
@@ -98,28 +98,36 @@ void execute(const resize::Resize &resize_h, const resize::Resize &resize_v, con
 	Frame dst{ out.width(), out.height(), pxsize, planes };
 
 	bool hfirst = resize::resize_horizontal_first((double)out.width() / in.width(), (double)out.height() / in.height());
+	bool skip_h = !resize_h;
+	bool skip_v = !resize_v;
 
-	int tmp_width;
-	int tmp_height;
-	int tmp_stride;
-	AlignedVector<char> tmp_frame;
-	AlignedVector<char> tmp_buffer;
+	int tmp_width = 0;
+	int tmp_height = 0;
+	size_t tmp_size;
 
-	if (hfirst) {
-		tmp_width = out.width();
-		tmp_height = in.height();
-		tmp_stride = align(tmp_width, ALIGNMENT / pxsize);
-
-		tmp_frame = allocate_buffer((size_t)tmp_stride * tmp_height, type);
-		tmp_buffer = allocate_buffer(resize_v.tmp_size(type, tmp_width), type);
+	if (skip_h && skip_v) {
+		tmp_size = 0;
+	} else if (skip_h && !skip_v) {
+		tmp_size = resize_v->tmp_size(type, in.width());
+	} else if (skip_v && !skip_h) {
+		tmp_size = resize_h->tmp_size(type, in.width());
 	} else {
-		tmp_width = in.width();
-		tmp_height = out.height();
-		tmp_stride = align(tmp_width, ALIGNMENT / pxsize);
+		if (hfirst) {
+			tmp_width = out.width();
+			tmp_height = in.height();
 
-		tmp_frame = allocate_buffer((size_t)tmp_stride * tmp_height, type);
-		tmp_buffer = allocate_buffer(resize_v.tmp_size(type, in.width()), type);
+			tmp_size = std::max(resize_h->tmp_size(type, in.width()), resize_v->tmp_size(type, tmp_width));
+		} else {
+			tmp_width = in.width();
+			tmp_height = out.height();
+
+			tmp_size = std::max(resize_v->tmp_size(type, in.width()), resize_h->tmp_size(type, tmp_width));
+		}
 	}
+
+	int tmp_stride = align(tmp_width, ALIGNMENT / pxsize);
+	auto tmp_frame = allocate_buffer((size_t)tmp_stride * tmp_height, type);
+	auto tmp_buffer = allocate_buffer(tmp_size, type);
 
 	convert_frame(in, src, PixelType::BYTE, type, true, false);
 
@@ -128,14 +136,23 @@ void execute(const resize::Resize &resize_h, const resize::Resize &resize_v, con
 		for (int p = 0; p < planes; ++p) {
 			ImageTile src_tile{ src.data(p), src.stride() * pxsize, src.width(), src.height(), default_pixel_format(type) };
 			ImageTile dst_tile{ dst.data(p), dst.stride() * pxsize, dst.width(), dst.height(), default_pixel_format(type) };
-			ImageTile tmp_tile{ tmp_frame.data(), tmp_stride * pxsize, tmp_width, tmp_height, default_pixel_format(type) };
 
-			if (hfirst) {
-				resize_h.process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
-				resize_v.process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
+			if (skip_h && skip_v) {
+				copy_image_tile(src_tile, dst_tile);
+			} else if (skip_h && !skip_v) {
+				resize_v->process(src_tile, dst_tile, 0, 0, tmp_buffer.data());
+			} else if (skip_v && !skip_h) {
+				resize_h->process(src_tile, dst_tile, 0, 0, tmp_buffer.data());
 			} else {
-				resize_v.process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
-				resize_h.process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
+				ImageTile tmp_tile{ tmp_frame.data(), tmp_stride * pxsize, tmp_width, tmp_height, default_pixel_format(type) };
+
+				if (hfirst) {
+					resize_h->process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
+					resize_v->process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
+				} else {
+					resize_v->process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
+					resize_h->process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
+				}
 			}
 		}
 	});
@@ -179,10 +196,18 @@ int resize_main(int argc, const char **argv)
 	if (!c.filter)
 		c.filter.reset(new resize::BilinearFilter{});
 
-	resize::Resize resize_h{ *c.filter, true, in.width(), c.width, c.shift_w, c.sub_w, c.cpu };
-	resize::Resize resize_v{ *c.filter, false, in.height(), c.height, c.shift_h, c.sub_h, c.cpu };
+	bool skip_h = in.width() == c.width && c.shift_w == 0.0 && c.sub_w == in.width();
+	bool skip_v = in.height() == c.height && c.shift_h == 0.0 && c.sub_h == in.height();
 
-	execute(resize_h, resize_v, in, out, c.times, c.pixtype);
+	resize::Resize resize_h;
+	resize::Resize resize_v;
+
+	if (!skip_h)
+		resize_h = resize::Resize{ *c.filter, true, in.width(), c.width, c.shift_w, c.sub_w, c.cpu };
+	if (!skip_v)
+		resize_v = resize::Resize{ *c.filter, false, in.height(), c.height, c.shift_h, c.sub_h, c.cpu };
+
+	execute(skip_h ? nullptr : &resize_h, skip_v ? nullptr : &resize_v, in, out, c.times, c.pixtype);
 	write_frame_bmp(out, c.outfile);
 
 	return 0;

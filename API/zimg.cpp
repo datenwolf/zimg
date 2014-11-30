@@ -1,8 +1,10 @@
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <utility>
 #include "Common/align.h"
 #include "Common/cpuinfo.h"
 #include "Common/except.h"
@@ -194,8 +196,8 @@ struct zimg_depth_context {
 };
 
 struct zimg_resize_context {
-	resize::Resize pass1;
-	resize::Resize pass2;
+	std::unique_ptr<resize::Resize> pass1;
+	std::unique_ptr<resize::Resize> pass2;
 	int src_width;
 	int tmp_width;
 	int tmp_height;
@@ -378,17 +380,45 @@ zimg_resize_context *zimg_resize_create(int filter_type, int src_width, int src_
 
 	try {
 		std::unique_ptr<resize::Filter> filter{ create_filter(filter_type, filter_param_a, filter_param_b) };
-		resize::Resize resize_h{ *filter, true, src_width, dst_width, shift_w, subwidth, g_cpu_type };
-		resize::Resize resize_v{ *filter, false, src_height, dst_height, shift_h, subheight, g_cpu_type };
+		std::unique_ptr<resize::Resize> resize_h;
+		std::unique_ptr<resize::Resize> resize_v;
 
-		bool horizontal_first = resize::resize_horizontal_first((double)dst_width / src_width, (double)dst_height / src_height);
+		std::unique_ptr<resize::Resize> pass1;
+		std::unique_ptr<resize::Resize> pass2;
 
-		const resize::Resize &pass1 = horizontal_first ? resize_h : resize_v;
-		const resize::Resize &pass2 = horizontal_first ? resize_v : resize_h;
-		int tmp_width = horizontal_first ? dst_width : src_width;
-		int tmp_height = horizontal_first ? src_height : dst_height;
+		bool skip_h = src_width == dst_width && shift_w == 0.0 && subwidth == src_width;
+		bool skip_v = src_height == dst_height && shift_h == 0.0 && subheight == src_height;
+		int tmp_width = 0;
+		int tmp_height = 0;
 
-		ret = new zimg_resize_context{ pass1, pass2, src_width, tmp_width, tmp_height };
+		if (!skip_h)
+			resize_h.reset(new resize::Resize{ *filter, true, src_width, dst_width, shift_w, subwidth, g_cpu_type });
+		if (!skip_v)
+			resize_v.reset(new resize::Resize{ *filter, false, src_height, dst_height, shift_h, subheight, g_cpu_type });
+
+		if (!skip_h && !skip_v) {
+			bool hfirst = resize::resize_horizontal_first((double)dst_width / src_width, (double)dst_height / src_height);
+
+			if (hfirst) {
+				std::swap(resize_h, pass1);
+				std::swap(resize_v, pass2);
+
+				tmp_width = dst_width;
+				tmp_height = src_height;
+			} else {
+				std::swap(resize_v, pass1);
+				std::swap(resize_h, pass2);
+
+				tmp_width = src_width;
+				tmp_height = dst_height;
+			}
+		} else if (skip_h && !skip_v) {
+			std::swap(resize_v, pass1);
+		} else if (skip_v && !skip_h) {
+			std::swap(resize_h, pass1);
+		}
+
+		ret = new zimg_resize_context{ std::move(pass1), std::move(pass2), src_width, tmp_width, tmp_height };
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	} catch (const std::bad_alloc &) {
@@ -404,12 +434,19 @@ size_t zimg_resize_tmp_size(zimg_resize_context *ctx, int pixel_type)
 
 	try {
 		PixelType type = get_pixel_type(pixel_type);
+		size_t tmp_pass1 = 0;
+		size_t tmp_pass2 = 0;
 
-		ret += ctx->pass1.tmp_size(type, ctx->src_width) * pixel_size(type);
-		ret += ctx->pass2.tmp_size(type, ctx->tmp_width) * pixel_size(type);
+		if (ctx->pass1)
+			tmp_pass1 = ctx->pass1->tmp_size(type, ctx->src_width) * pixel_size(type);
+		if (ctx->pass2)
+			tmp_pass2 = ctx->pass2->tmp_size(type, ctx->tmp_width) * pixel_size(type);
+
+		ret += std::max(tmp_pass1, tmp_pass2);
 
 		// Temporary frame.
-		ret += (size_t)align(ctx->tmp_width * pixel_size(type), ALIGNMENT) * ctx->tmp_height;
+		if (ctx->pass1 && ctx->pass2)
+			ret += (size_t)align(ctx->tmp_width * pixel_size(type), ALIGNMENT) * ctx->tmp_height;
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}
@@ -429,12 +466,18 @@ int zimg_resize_process(zimg_resize_context *ctx, const void *src, void *dst, vo
 
 		ImageTile src_tile{ (void *)src, src_stride, src_width, src_height, default_pixel_format(type) };
 		ImageTile dst_tile{ (void *)dst, dst_stride, dst_width, dst_height, default_pixel_format(type) };
-		ImageTile tmp_tile{ tmp, tmp_stride, ctx->tmp_width, ctx->tmp_height, default_pixel_format(type) };
 
-		tmp = (char *)tmp + (size_t)tmp_stride * ctx->tmp_height;
+		if (!ctx->pass1 && !ctx->pass2) {
+			copy_image_tile(src_tile, dst_tile);
+		} else if (ctx->pass1 && !ctx->pass2) {
+			ctx->pass1->process(src_tile, dst_tile, 0, 0, tmp);
+		} else {
+			ImageTile tmp_tile{ tmp, tmp_stride, ctx->tmp_width, ctx->tmp_height, default_pixel_format(type) };
+			tmp = (char *)tmp + (size_t)tmp_stride * ctx->tmp_height;
 
-		ctx->pass1.process(src_tile, tmp_tile, 0, 0, tmp);
-		ctx->pass2.process(tmp_tile, dst_tile, 0, 0, tmp);
+			ctx->pass1->process(src_tile, tmp_tile, 0, 0, tmp);
+			ctx->pass2->process(tmp_tile, dst_tile, 0, 0, tmp);
+		}
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}
