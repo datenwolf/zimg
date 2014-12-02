@@ -49,7 +49,7 @@ void filter_plane_h_sse2(const BilinearContext &ctx, const ImageTile &src, const
 	const float *pl = ctx.lu_l.data();
 	const float *pu = ctx.lu_u.data();
 
-	for (int i = 0; i < mod(src_height, 4); i += 4) {
+	for (int i = 0; i < floor_n(src_height, 4); i += 4) {
 		const float *src_ptr0 = src_view[i + 0];
 		const float *src_ptr1 = src_view[i + 1];
 		const float *src_ptr2 = src_view[i + 2];
@@ -126,7 +126,7 @@ void filter_plane_h_sse2(const BilinearContext &ctx, const ImageTile &src, const
 
 		// Backward substitution and output loop.
 		__m128 w = _mm_setzero_ps();
-		for (int j = ctx.dst_width; j > mod(ctx.dst_width, 4); --j) {
+		for (int j = ctx.dst_width; j > floor_n(ctx.dst_width, 4); --j) {
 			float w_buf[4];
 
 			_mm_storeu_ps(w_buf, w);
@@ -136,7 +136,7 @@ void filter_plane_h_sse2(const BilinearContext &ctx, const ImageTile &src, const
 			}
 			w = _mm_loadu_ps(w_buf);
 		}
-		for (ptrdiff_t j = mod(ctx.dst_width, 4); j > 0; j -= 4) {
+		for (ptrdiff_t j = floor_n(ctx.dst_width, 4); j > 0; j -= 4) {
 			__m128 u0, u1, u2, u3;
 			__m128 z0, z1, z2, z3;
 			__m128 w0, w1, w2, w3;
@@ -174,7 +174,7 @@ void filter_plane_h_sse2(const BilinearContext &ctx, const ImageTile &src, const
 			_mm_store_ps(&dst_ptr3[j - 4], w3);
 		}
 	}
-	for (int i = mod(src_height, 4); i < src_height; ++i) {
+	for (int i = floor_n(src_height, 4); i < src_height; ++i) {
 		filter_scanline_h_forward(ctx, src, tmp, i, 0, ctx.dst_width, ScalarPolicy_F32{});
 		filter_scanline_h_back(ctx, tmp, dst, i, ctx.dst_width, 0, ScalarPolicy_F32{});
 	}
@@ -202,7 +202,7 @@ void filter_plane_v_sse2(const BilinearContext &ctx, const ImageTile &src, const
 		float *dst_ptr = dst_view[i];
 
 		// Matrix-vector product.
-		for (int k = 0; k < mod(ctx.matrix_row_size, 4); k += 4) {
+		for (int k = 0; k < floor_n(ctx.matrix_row_size, 4); k += 4) {
 			const float *src_ptr0 = src_view[top + k + 0];
 			const float *src_ptr1 = src_view[top + k + 1];
 			const float *src_ptr2 = src_view[top + k + 2];
@@ -213,7 +213,7 @@ void filter_plane_v_sse2(const BilinearContext &ctx, const ImageTile &src, const
 			__m128 coeff2 = _mm_set_ps1(matrix_row[k + 2]);
 			__m128 coeff3 = _mm_set_ps1(matrix_row[k + 3]);
 
-			for (int j = 0; j < mod(src_width, 4); j += 4) {
+			for (int j = 0; j < floor_n(src_width, 4); j += 4) {
 				__m128 x0, x1, x2, x3;
 				__m128 accum0, accum1;
 
@@ -251,7 +251,7 @@ void filter_plane_v_sse2(const BilinearContext &ctx, const ImageTile &src, const
 			__m128 coeff1 = _mm_set_ps1(matrix_row[k + 1]);
 			__m128 coeff2 = _mm_set_ps1(matrix_row[k + 2]);
 
-			for (int j = 0; j < mod(src_width, 4); j += 4) {
+			for (int j = 0; j < floor_n(src_width, 4); j += 4) {
 				__m128 x0, x1, x2;
 
 				__m128 accum0 = _mm_setzero_ps();
@@ -285,7 +285,7 @@ void filter_plane_v_sse2(const BilinearContext &ctx, const ImageTile &src, const
 
 		const float *dst_prev = i ? dst_view[i - 1] : nullptr;
 
-		for (int j = 0; j < mod(src_width, 4); j += 4) {
+		for (int j = 0; j < floor_n(src_width, 4); j += 4) {
 			__m128 z = i ? _mm_load_ps(&dst_prev[j]) : _mm_setzero_ps();
 			__m128 f = _mm_load_ps(&dst_ptr[j]);
 
@@ -295,7 +295,7 @@ void filter_plane_v_sse2(const BilinearContext &ctx, const ImageTile &src, const
 
 			_mm_store_ps(&dst_ptr[j], z);
 		}
-		filter_scanline_v_forward(ctx, src, dst, i, mod(src_width, 4), src_width, ScalarPolicy_F32{});
+		filter_scanline_v_forward(ctx, src, dst, i, floor_n(src_width, 4), src_width, ScalarPolicy_F32{});
 	}
 
 	// Back substitution.
@@ -305,7 +305,7 @@ void filter_plane_v_sse2(const BilinearContext &ctx, const ImageTile &src, const
 		const float *dst_prev = i < ctx.dst_width ? dst_view[i] : nullptr;
 		float *dst_ptr = dst_view[i - 1];
 
-		for (int j = 0; j < mod(src_width, 4); j += 4) {
+		for (int j = 0; j < floor_n(src_width, 4); j += 4) {
 			__m128 w = i < ctx.dst_width ? _mm_load_ps(&dst_prev[j]) : _mm_setzero_ps();
 			__m128 z = _mm_load_ps(&dst_ptr[j]);
 			
@@ -314,7 +314,7 @@ void filter_plane_v_sse2(const BilinearContext &ctx, const ImageTile &src, const
 
 			_mm_store_ps(&dst_ptr[j], w);
 		}
-		filter_scanline_v_back(ctx, dst, i, mod(src_width, 4), src_width, ScalarPolicy_F32{});
+		filter_scanline_v_back(ctx, dst, i, floor_n(src_width, 4), src_width, ScalarPolicy_F32{});
 	}
 }
 

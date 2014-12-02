@@ -39,7 +39,7 @@ try :
 
 void ColorspaceConversion::load_tile(const ImageTile &src, float *dst) const
 {
-	ImageTile dst_tile{ dst, align(src.width * (int)sizeof(float), ALIGNMENT), src.width, src.height, default_pixel_format(PixelType::FLOAT)};
+	ImageTile dst_tile{ dst, ceil_n(src.width * (int)sizeof(float), ALIGNMENT), src.width, src.height, default_pixel_format(PixelType::FLOAT) };
 
 	if (src.format.type == PixelType::HALF)
 		m_pixel_adapter->f16_to_f32(src, dst_tile);
@@ -49,7 +49,7 @@ void ColorspaceConversion::load_tile(const ImageTile &src, float *dst) const
 
 void ColorspaceConversion::store_tile(float *src, const ImageTile &dst) const
 {
-	ImageTile src_tile{ src, align(dst.width * (int)sizeof(float), ALIGNMENT), dst.width, dst.height, default_pixel_format(PixelType::FLOAT)};
+	ImageTile src_tile{ src, ceil_n(dst.width * (int)sizeof(float), ALIGNMENT), dst.width, dst.height, default_pixel_format(PixelType::FLOAT) };
 
 	if (dst.format.type == PixelType::HALF)
 		m_pixel_adapter->f32_to_f16(src_tile, dst);
@@ -64,13 +64,13 @@ bool ColorspaceConversion::pixel_supported(PixelType type) const
 
 size_t ColorspaceConversion::tmp_size(int width, int height) const
 {
-	size_t stride = align(width, AlignmentOf<float>::value);
+	size_t stride = ceil_n(width, AlignmentOf<float>::value);
 	return 3 * stride * height;
 }
 
 void ColorspaceConversion::process_tile(const ImageTile src[3], const ImageTile dst[3], void *tmp) const
 {
-	int tmp_tile_size = align(src[0].width, AlignmentOf<float>::value) * src[0].height;
+	int tmp_tile_size = ceil_n(src[0].width, AlignmentOf<float>::value) * src[0].height;
 	float *tmp_ptr[3];
 
 	tmp_ptr[0] = (float *)tmp + 0 * tmp_tile_size;

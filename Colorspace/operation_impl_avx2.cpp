@@ -39,7 +39,7 @@ public:
 			const uint16_t *src_ptr = src_view[i];
 			float *dst_ptr = dst_view[i];
 
-			for (int j = 0; j < mod(src.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(src.width, 8); j += 8) {
 				__m128i f16;
 				__m256 f32;
 
@@ -48,7 +48,7 @@ public:
 
 				_mm256_store_ps(&dst_ptr[j], f32);
 			}
-			for (int j = mod(src.width, 8); j < src.width; ++j) {
+			for (int j = floor_n(src.width, 8); j < src.width; ++j) {
 				dst_ptr[j] = half_to_float(src_ptr[j]);
 			}
 		}
@@ -63,7 +63,7 @@ public:
 			const float *src_ptr = src_view[i];
 			uint16_t *dst_ptr = dst_view[i];
 
-			for (int j = 0; j < mod(src.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(src.width, 8); j += 8) {
 				__m128i f16;
 				__m256 f32;
 
@@ -72,7 +72,7 @@ public:
 
 				_mm_store_si128((__m128i *)&dst_ptr[j], f16);
 			}
-			for (int j = mod(src.width, 8); j < src.width; ++j) {
+			for (int j = floor_n(src.width, 8); j < src.width; ++j) {
 				dst_ptr[j] = float_to_half(src_ptr[j]);
 			}
 		}
@@ -96,7 +96,7 @@ public:
 		__m128i zero = _mm_set1_epi16(0);
 
 		for (int p = 0; p < 3; ++p) {
-			for (int i = 0; i < mod(width, 8); i += 8) {
+			for (int i = 0; i < floor_n(width, 8); i += 8) {
 				__m256 f32 = _mm256_load_ps(&ptr[p][i]);
 				__m128i half = _mm256_cvtps_ph(f32, 0);
 				__m128i lo = _mm_unpacklo_epi16(half, zero);
@@ -107,7 +107,7 @@ public:
 
 				_mm256_store_ps(&ptr[p][i], result);
 			}
-			for (int i = mod(width, 8); i < width; ++i) {
+			for (int i = floor_n(width, 8); i < width; ++i) {
 				uint16_t half = float_to_half(ptr[p][i]);
 				ptr[p][i] = m_lut[half];
 			}
@@ -132,7 +132,7 @@ public:
 		__m256 c21 = _mm256_set1_ps(m_matrix[2][1]);
 		__m256 c22 = _mm256_set1_ps(m_matrix[2][2]);
 
-		for (int i = 0; i < mod(width, 8); i += 8) {
+		for (int i = 0; i < floor_n(width, 8); i += 8) {
 			__m256 a = _mm256_load_ps(&ptr[0][i]);
 			__m256 b = _mm256_load_ps(&ptr[1][i]);
 			__m256 c = _mm256_load_ps(&ptr[2][i]);
@@ -154,7 +154,7 @@ public:
 			_mm256_store_ps(&ptr[1][i], y);
 			_mm256_store_ps(&ptr[2][i], z);
 		}
-		for (int i = mod(width, 8); i < width; ++i) {
+		for (int i = floor_n(width, 8); i < width; ++i) {
 			float a, b, c;
 			float x, y, z;
 

@@ -125,7 +125,7 @@ void execute(const resize::Resize *resize_h, const resize::Resize *resize_v, con
 		}
 	}
 
-	int tmp_stride = align(tmp_width, ALIGNMENT / pxsize);
+	int tmp_stride = ceil_n(tmp_width, ALIGNMENT / pxsize);
 	auto tmp_frame = allocate_buffer((size_t)tmp_stride * tmp_height, type);
 	auto tmp_buffer = allocate_buffer(tmp_size, type);
 

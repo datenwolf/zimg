@@ -59,7 +59,7 @@ protected:
 			src_vector_type src_unpacked[loop_unroll_unpack::value * Unpack::unpacked_count];
 			dst_vector_type dst_unpacked[loop_unroll_pack::value * Pack::unpacked_count];
 
-			for (int j = 0; j < mod(src.width, loop_step::value); j += loop_step::value) {
+			for (int j = 0; j < floor_n(src.width, loop_step::value); j += loop_step::value) {
 				for (int k = 0; k < loop_unroll_unpack::value; ++k) {
 					unpack.unpack(&src_unpacked[k * Unpack::unpacked_count], &src_row[j + k * Unpack::loop_step]);
 				}
@@ -83,7 +83,7 @@ protected:
 				m %= NUM_DITHERS_H;
 			}
 
-			for (int j = mod(src.width, loop_step::value); j < src.width; ++j) {
+			for (int j = floor_n(src.width, loop_step::value); j < src.width; ++j) {
 				float x = to_float_scalar(src_row[j]);
 				float d = dither_row[m++];
 

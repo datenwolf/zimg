@@ -446,7 +446,7 @@ size_t zimg_resize_tmp_size(zimg_resize_context *ctx, int pixel_type)
 
 		// Temporary frame.
 		if (ctx->pass1 && ctx->pass2)
-			ret += (size_t)align(ctx->tmp_width * pixel_size(type), ALIGNMENT) * ctx->tmp_height;
+			ret += (size_t)ceil_n(ctx->tmp_width * pixel_size(type), ALIGNMENT) * ctx->tmp_height;
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}
@@ -462,7 +462,7 @@ int zimg_resize_process(zimg_resize_context *ctx, const void *src, void *dst, vo
 
 	try {
 		PixelType type = get_pixel_type(pixel_type);
-		int tmp_stride = align(ctx->tmp_width * pixel_size(type), ALIGNMENT);
+		int tmp_stride = ceil_n(ctx->tmp_width * pixel_size(type), ALIGNMENT);
 
 		ImageTile src_tile{ (void *)src, src_stride, src_width, src_height, default_pixel_format(type) };
 		ImageTile dst_tile{ (void *)dst, dst_stride, dst_width, dst_height, default_pixel_format(type) };

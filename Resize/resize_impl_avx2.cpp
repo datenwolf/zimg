@@ -141,7 +141,7 @@ void resize_tile_u16_h_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 
 	int left_base = filter_left[0];
 
-	for (int i = 0; i < mod(dst.height, 8); i += 8) {
+	for (int i = 0; i < floor_n(dst.height, 8); i += 8) {
 		const uint16_t *src_ptr0 = src_view[i + 0];
 		const uint16_t *src_ptr1 = src_view[i + 1];
 		const uint16_t *src_ptr2 = src_view[i + 2];
@@ -224,7 +224,7 @@ void resize_tile_u16_h_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 			cached[j % 16] = accum;
 
 			if (j % 16 == 15) {
-				int dst_j = mod(j, 16);
+				int dst_j = floor_n(j, 16);
 				__m256i packed;
 
 				transpose8_epi32(cached[0], cached[1], cached[2], cached[3], cached[8], cached[9], cached[10], cached[11]);
@@ -263,9 +263,9 @@ void resize_tile_u16_h_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 				_mm256_store_si256((__m256i *)&dst_ptr7[dst_j], packed);
 			}
 		}
-		resize_tile_h_scalar(filter, src, dst, 0, i, mod(j, 16), i + 8, dst.width, ScalarPolicy_U16{});
+		resize_tile_h_scalar(filter, src, dst, 0, i, floor_n(j, 16), i + 8, dst.width, ScalarPolicy_U16{});
 	}
-	resize_tile_h_scalar(filter, src, dst, 0, mod(dst.height, 8), 0, dst.height, dst.width, ScalarPolicy_U16{});
+	resize_tile_h_scalar(filter, src, dst, 0, floor_n(dst.height, 8), 0, dst.height, dst.width, ScalarPolicy_U16{});
 }
 
 template <bool DoLoop, class Policy>
@@ -283,7 +283,7 @@ void resize_tile_fp_h_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 
 	int left_base = filter_left[0];
 
-	for (int i = 0; i < mod(dst.height, 8); i += 8) {
+	for (int i = 0; i < floor_n(dst.height, 8); i += 8) {
 		const data_type *src_ptr0 = src_view[i + 0];
 		const data_type *src_ptr1 = src_view[i + 1];
 		const data_type *src_ptr2 = src_view[i + 2];
@@ -358,7 +358,7 @@ void resize_tile_fp_h_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 			cached[j % 8] = accum;
 
 			if (j % 8 == 7) {
-				int dst_j = mod(j, 8);
+				int dst_j = floor_n(j, 8);
 
 				transpose8_ps(cached[0], cached[1], cached[2], cached[3], cached[4], cached[5], cached[6], cached[7]);
 
@@ -372,9 +372,9 @@ void resize_tile_fp_h_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 				policy.store_8(&dst_ptr7[dst_j], cached[7]);
 			}
 		}
-		resize_tile_h_scalar(filter, src, dst, 0, i, mod(j, 8), i + 8, dst.width, policy);
+		resize_tile_h_scalar(filter, src, dst, 0, i, floor_n(j, 8), i + 8, dst.width, policy);
 	}
-	resize_tile_h_scalar(filter, src, dst, 0, mod(dst.height, 8), 0, dst.height, dst.width, policy);
+	resize_tile_h_scalar(filter, src, dst, 0, floor_n(dst.height, 8), 0, dst.height, dst.width, policy);
 }
 
 void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n, uint32_t *tmp)
@@ -396,7 +396,7 @@ void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 		int top = filter_left[i] - top_base;
 		uint16_t *dst_ptr = dst_view[i];
 
-		for (int k = 0; k < mod(filter.width(), 8); k += 8) {
+		for (int k = 0; k < floor_n(filter.width(), 8); k += 8) {
 			const uint16_t *src_ptr0 = src_view[top + k + 0];
 			const uint16_t *src_ptr1 = src_view[top + k + 1];
 			const uint16_t *src_ptr2 = src_view[top + k + 2];
@@ -420,7 +420,7 @@ void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 			__m256i coeff45 = _mm256_unpacklo_epi16(coeff4, coeff5);
 			__m256i coeff67 = _mm256_unpacklo_epi16(coeff6, coeff7);
 
-			for (int j = 0; j < mod(dst.width, 16); j += 16) {
+			for (int j = 0; j < floor_n(dst.width, 16); j += 16) {
 				__m256i x0, x1, x2, x3, x4, x5, x6, x7;
 				__m256i packed;
 
@@ -497,7 +497,7 @@ void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 			__m256i coeff45 = _mm256_unpacklo_epi16(coeff4, coeff5);
 			__m256i coeff67 = _mm256_unpacklo_epi16(coeff6, coeff7);
 
-			for (ptrdiff_t j = 0; j < mod(dst.width, 16); j += 16) {
+			for (ptrdiff_t j = 0; j < floor_n(dst.width, 16); j += 16) {
 				__m256i x0, x1, x2, x3, x4, x5, x6, x7;
 				__m256i packed;
 
@@ -549,7 +549,7 @@ void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 				_mm256_store_si256((__m256i *)&dst_ptr[j], packed);
 			}
 		}
-		resize_tile_v_scalar(filter, src, dst, 0, i, mod(dst.width, 16), i + 1, dst.width, ScalarPolicy_U16{});
+		resize_tile_v_scalar(filter, src, dst, 0, i, floor_n(dst.width, 16), i + 1, dst.width, ScalarPolicy_U16{});
 	}
 }
 
@@ -573,7 +573,7 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 		int top = filter_left[i] - top_base;
 		data_type *dst_ptr = dst_view[i];
 
-		for (int k = 0; k < mod(filter.width(), 8); k += 8) {
+		for (int k = 0; k < floor_n(filter.width(), 8); k += 8) {
 			const data_type *src_ptr0 = src_view[top + k + 0];
 			const data_type *src_ptr1 = src_view[top + k + 1];
 			const data_type *src_ptr2 = src_view[top + k + 2];
@@ -592,7 +592,7 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 			__m256 coeff6 = _mm256_broadcast_ss(&filter_row[k + 6]);
 			__m256 coeff7 = _mm256_broadcast_ss(&filter_row[k + 7]);
 
-			for (int j = 0; j < mod(dst.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(dst.width, 8); j += 8) {
 				__m256 x0, x1, x2, x3, x4, x5, x6, x7;
 				__m256 accum0, accum1, accum2, accum3;
 
@@ -650,7 +650,7 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 			__m256 coeff5 = _mm256_broadcast_ss(&filter_row[k + 5]);
 			__m256 coeff6 = _mm256_broadcast_ss(&filter_row[k + 6]);
 
-			for (int j = 0; j < mod(dst.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(dst.width, 8); j += 8) {
 				__m256 x0, x1, x2, x3, x4, x5, x6;
 
 				__m256 accum0 = _mm256_setzero_ps();
@@ -692,7 +692,7 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 				policy.store_8(&dst_ptr[j], accum0);
 			}
 		}
-		resize_tile_v_scalar(filter, src, dst, 0, i, mod(dst.width, 8), i + 1, dst.width, policy);
+		resize_tile_v_scalar(filter, src, dst, 0, i, floor_n(dst.width, 8), i + 1, dst.width, policy);
 	}
 }
 

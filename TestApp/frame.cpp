@@ -52,7 +52,7 @@ Frame::Frame(int width, int height, int pxsize, int planes) :
 	m_width{ width },
 	m_height{ height },
 	m_pxsize{ pxsize },
-	m_stride{ align(width, ALIGNMENT / pxsize) },
+	m_stride{ ceil_n(width, ALIGNMENT / pxsize) },
 	m_planes{ planes }
 {
 	size_t plane_sz = (size_t)m_stride * height * pxsize;
@@ -137,7 +137,7 @@ Frame read_frame_bmp(const char *filename)
 	int width = biheader.biWidth;
 	int height = biheader.biHeight;
 	int channels = biheader.biBitCount == 32 ? 4 : 3;
-	size_t bmp_rowsize = align(width * channels, 4);
+	size_t bmp_rowsize = ceil_n(width * channels, 4);
 
 	Frame frame{ width, height, 1, channels };
 	AlignedVector<uint8_t> buf(bmp_rowsize);
@@ -194,7 +194,7 @@ void write_frame_bmp(const Frame &frame, const char *filename)
 	BITMAPFILEHEADER bfheader{};
 	BITMAPINFOHEADER biheader{};
 
-	DWORD bmp_rowsize = align(frame.width() * frame.planes(), 4);
+	DWORD bmp_rowsize = ceil_n(frame.width() * frame.planes(), 4);
 	DWORD bmp_datasize = bmp_rowsize * frame.height();
 
 	bfheader.bfType = BMP_MAGIC;

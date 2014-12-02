@@ -50,7 +50,7 @@ protected:
 			const T *src_ptr = src_view[i];
 			U *dst_ptr = dst_view[i];
 
-			for (int j = 0; j < mod(src.width, loop_step::value); j += loop_step::value) {
+			for (int j = 0; j < floor_n(src.width, loop_step::value); j += loop_step::value) {
 				for (int k = 0; k < loop_unroll_unpack::value; ++k) {
 					unpack.unpack(&src_unpacked[k * Unpack::unpacked_count], &src_ptr[j + k * Unpack::loop_step]);
 				}
@@ -63,7 +63,7 @@ protected:
 					pack.pack(&dst_ptr[j + k * Pack::loop_step], &dst_unpacked[k * Pack::unpacked_count]);
 				}
 			}
-			for (int j = mod(src.width, loop_step::value); j < src.width; ++j) {
+			for (int j = floor_n(src.width, loop_step::value); j < src.width; ++j) {
 				dst_ptr[j] = scalar_op(src_ptr[j]);
 			}
 		}

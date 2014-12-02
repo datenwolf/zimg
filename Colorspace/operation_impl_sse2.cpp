@@ -29,7 +29,7 @@ public:
 		__m128 c21 = _mm_set_ps1(m_matrix[2][1]);
 		__m128 c22 = _mm_set_ps1(m_matrix[2][2]);
 
-		for (int i = 0; i < mod(width, 4); i += 4) {
+		for (int i = 0; i < floor_n(width, 4); i += 4) {
 			__m128 tmp0, tmp1;
 
 			__m128 a = _mm_load_ps(&ptr[0][i]);
@@ -59,7 +59,7 @@ public:
 			_mm_store_ps(&ptr[1][i], y);
 			_mm_store_ps(&ptr[2][i], z);
 		}
-		for (int i = mod(width, 4); i < width; ++i) {
+		for (int i = floor_n(width, 4); i < width; ++i) {
 			float a, b, c;
 			float x, y, z;
 

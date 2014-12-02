@@ -121,7 +121,7 @@ BilinearContext create_bilinear_context(int in, int out, double shift)
 	for (size_t i = 0; i < rows; ++i) {
 		rowsize = std::max(transpose_m.row_right(i) - transpose_m.row_left(i), rowsize);
 	}
-	size_t rowstride = (int)align(rowsize, 8);
+	size_t rowstride = (int)ceil_n(rowsize, 8);
 
 	ctx.matrix_coefficients.resize(rowstride * rows);
 	ctx.matrix_row_offsets.resize(rows);

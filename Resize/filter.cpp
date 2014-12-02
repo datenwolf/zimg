@@ -51,7 +51,7 @@ EvaluatedFilter matrix_to_filter(const RowMatrix<double> &m)
 		}
 		e.left()[i] = left;
 	}
-	for (size_t i = m.rows(); i < align(m.rows(), 64); ++i) {
+	for (size_t i = m.rows(); i < ceil_n(m.rows(), 64); ++i) {
 		e.left()[i] = e.left()[m.rows() - 1];
 	}
 
@@ -172,11 +172,11 @@ double LanczosFilter::operator()(double x) const
 
 EvaluatedFilter::EvaluatedFilter(int width, int height) :
 	m_width{ width },
-	m_stride{ align(width, AlignmentOf<float>::value) },
-	m_stride_i16{ align(width, AlignmentOf<int16_t>::value) },
-	m_data((size_t)m_stride * align(height,64)),
-	m_data_i16((size_t)m_stride_i16 * align(height, 64)),
-	m_left(align(height, 64))
+	m_stride{ ceil_n(width, AlignmentOf<float>::value) },
+	m_stride_i16{ ceil_n(width, AlignmentOf<int16_t>::value) },
+	m_data((size_t)m_stride * ceil_n(height, 64)),
+	m_data_i16((size_t)m_stride_i16 * ceil_n(height, 64)),
+	m_left(ceil_n(height, 64))
 {
 }
 
