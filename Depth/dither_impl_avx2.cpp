@@ -29,60 +29,60 @@ public:
 	explicit OrderedDitherAVX2(const float *dither) : OrderedDitherX86(dither)
 	{}
 
-	void byte_to_byte(const ImageTile &src, const ImageTile &dst, float *) const override
+	void byte_to_byte(const ImageTile<const uint8_t> &src, const ImageTile<uint8_t> &dst, float *tmp) const override
 	{
-		process<uint8_t, uint8_t>(src, dst, DitherPolicyAVX2{}, UnpackByteAVX2{}, PackByteAVX2{},
-		                          make_integer_to_float_avx2(src.format), make_float_to_integer_avx2(dst.format),
-		                          make_integer_to_float<uint8_t>(src.format), make_float_to_integer<uint8_t>(dst.format));
+		process(src, dst, DitherPolicyAVX2{}, UnpackByteAVX2{}, PackByteAVX2{},
+		        make_integer_to_float_avx2(src.descriptor()->format), make_float_to_integer_avx2(dst.descriptor()->format),
+		        make_integer_to_float<uint8_t>(src.descriptor()->format), make_float_to_integer<uint8_t>(dst.descriptor()->format));
 	}
 
-	void byte_to_word(const ImageTile &src, const ImageTile &dst, float *) const override
+	void byte_to_word(const ImageTile<const uint8_t> &src, const ImageTile<uint16_t> &dst, float *tmp) const override
 	{
-		process<uint8_t, uint16_t>(src, dst, DitherPolicyAVX2{}, UnpackByteAVX2{}, PackWordAVX2{},
-		                           make_integer_to_float_avx2(src.format), make_float_to_integer_avx2(dst.format),
-		                           make_integer_to_float<uint8_t>(src.format), make_float_to_integer<uint16_t>(dst.format));
+		process(src, dst, DitherPolicyAVX2{}, UnpackByteAVX2{}, PackWordAVX2{},
+		        make_integer_to_float_avx2(src.descriptor()->format), make_float_to_integer_avx2(dst.descriptor()->format),
+		        make_integer_to_float<uint8_t>(src.descriptor()->format), make_float_to_integer<uint16_t>(dst.descriptor()->format));
 	}
 
-	void word_to_byte(const ImageTile &src, const ImageTile &dst, float *) const override
+	void word_to_byte(const ImageTile<const uint16_t> &src, const ImageTile<uint8_t> &dst, float *tmp) const override
 	{
-		process<uint16_t, uint8_t>(src, dst, DitherPolicyAVX2{}, UnpackWordAVX2{}, PackByteAVX2{},
-		                           make_integer_to_float_avx2(src.format), make_float_to_integer_avx2(dst.format),
-		                           make_integer_to_float<uint16_t>(src.format), make_float_to_integer<uint8_t>(dst.format));
+		process(src, dst, DitherPolicyAVX2{}, UnpackWordAVX2{}, PackByteAVX2{},
+		        make_integer_to_float_avx2(src.descriptor()->format), make_float_to_integer_avx2(dst.descriptor()->format),
+		        make_integer_to_float<uint16_t>(src.descriptor()->format), make_float_to_integer<uint8_t>(dst.descriptor()->format));
 	}
 
-	void word_to_word(const ImageTile &src, const ImageTile &dst, float *) const override
+	void word_to_word(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, float *tmp) const override
 	{
-		process<uint16_t, uint16_t>(src, dst, DitherPolicyAVX2{}, UnpackWordAVX2{}, PackWordAVX2{},
-		                            make_integer_to_float_avx2(src.format), make_float_to_integer_avx2(dst.format),
-		                            make_integer_to_float<uint16_t>(src.format), make_float_to_integer<uint16_t>(dst.format));
+		process(src, dst, DitherPolicyAVX2{}, UnpackWordAVX2{}, PackWordAVX2{},
+		        make_integer_to_float_avx2(src.descriptor()->format), make_float_to_integer_avx2(dst.descriptor()->format),
+		        make_integer_to_float<uint16_t>(src.descriptor()->format), make_float_to_integer<uint16_t>(dst.descriptor()->format));
 	}
 
-	void half_to_byte(const ImageTile &src, const ImageTile &dst, float *) const override
+	void half_to_byte(const ImageTile<const uint16_t> &src, const ImageTile<uint8_t> &dst, float *tmp) const override
 	{
-		process<uint16_t, uint8_t>(src, dst, DitherPolicyAVX2{}, UnpackHalfAVX2{}, PackByteAVX2{},
-		                           half_to_float_avx2, make_float_to_integer_avx2(dst.format),
-		                           depth::half_to_float, make_float_to_integer<uint8_t>(dst.format));
+		process(src, dst, DitherPolicyAVX2{}, UnpackHalfAVX2{}, PackByteAVX2{},
+		        half_to_float_avx2, make_float_to_integer_avx2(dst.descriptor()->format),
+		        depth::half_to_float, make_float_to_integer<uint8_t>(dst.descriptor()->format));
 	}
 
-	void half_to_word(const ImageTile &src, const ImageTile &dst, float *) const override
+	void half_to_word(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, float *tmp) const override
 	{
-		process<uint16_t, uint16_t>(src, dst, DitherPolicyAVX2{}, UnpackHalfAVX2{}, PackWordAVX2{},
-		                            half_to_float_avx2, make_float_to_integer_avx2(dst.format),
-		                            depth::half_to_float, make_float_to_integer<uint16_t>(dst.format));
+		process(src, dst, DitherPolicyAVX2{}, UnpackHalfAVX2{}, PackWordAVX2{},
+		        half_to_float_avx2, make_float_to_integer_avx2(dst.descriptor()->format),
+		        depth::half_to_float, make_float_to_integer<uint16_t>(dst.descriptor()->format));
 	}
 
-	void float_to_byte(const ImageTile &src, const ImageTile &dst, float *) const override
+	void float_to_byte(const ImageTile<const float> &src, const ImageTile<uint8_t> &dst, float *tmp) const override
 	{
-		process<float, uint8_t>(src, dst, DitherPolicyAVX2{}, UnpackFloatAVX2{}, PackByteAVX2{},
-		                        identity<__m256>, make_float_to_integer_avx2(dst.format),
-		                        identity<float>, make_float_to_integer<uint8_t>(dst.format));
+		process(src, dst, DitherPolicyAVX2{}, UnpackFloatAVX2{}, PackByteAVX2{},
+		        identity<__m256>, make_float_to_integer_avx2(dst.descriptor()->format),
+		        identity<float>, make_float_to_integer<uint8_t>(dst.descriptor()->format));
 	}
 
-	void float_to_word(const ImageTile &src, const ImageTile &dst, float *) const override
+	void float_to_word(const ImageTile<const float> &src, const ImageTile<uint16_t> &dst, float *tmp) const override
 	{
-		process<float, uint16_t>(src, dst, DitherPolicyAVX2{}, UnpackFloatAVX2{}, PackWordAVX2{},
-		                         identity<__m256>, make_float_to_integer_avx2(dst.format),
-		                         identity<float>, make_float_to_integer<uint16_t>(dst.format));
+		process(src, dst, DitherPolicyAVX2{}, UnpackFloatAVX2{}, PackWordAVX2{},
+		        identity<__m256>, make_float_to_integer_avx2(dst.descriptor()->format),
+		        identity<float>, make_float_to_integer<uint16_t>(dst.descriptor()->format));
 	}
 };
 

@@ -266,7 +266,7 @@ zimg_colorspace_context *zimg_colorspace_create(int matrix_in, int transfer_in, 
 
 size_t zimg_colorspace_tmp_size(zimg_colorspace_context *ctx, int)
 {
-	return ctx->p.tmp_size(64, 64) * pixel_size(PixelType::FLOAT);
+	return ctx->p.tmp_size(TILE_WIDTH, TILE_HEIGHT) * pixel_size(PixelType::FLOAT);
 }
 
 int zimg_colorspace_process(zimg_colorspace_context *ctx, const void * const src[3], void * const dst[3], void *tmp,
@@ -278,34 +278,36 @@ int zimg_colorspace_process(zimg_colorspace_context *ctx, const void * const src
 		PixelType type = get_pixel_type(pixel_type);
 		int pxsize = pixel_size(type);
 
-		ImageTile src_tiles[3] = { 0 };
-		ImageTile dst_tiles[3] = { 0 };
+		PlaneDescriptor desc{ type };
+
+		ImageTile<const void> src_plane_tiles[3];
+		ImageTile<void> dst_plane_tiles[3];
+
+		ImageTile<const void> src_tiles[3];
+		ImageTile<void> dst_tiles[3];
 
 		if (!ctx->p.pixel_supported(type))
 			throw ZimgUnsupportedError{ "unsupported pixel format" };
 
 		for (int p = 0; p < 3; ++p) {
-			src_tiles[p].byte_stride = src_stride[p];
-			dst_tiles[p].byte_stride = dst_stride[p];
-
-			src_tiles[p].format = default_pixel_format(type);
-			dst_tiles[p].format = default_pixel_format(type);
+			src_plane_tiles[p] = ImageTile<const void>{ src[p], &desc, src_stride[p], width, height };
+			dst_plane_tiles[p] = ImageTile<void>{ dst[p], &desc, dst_stride[p], width, height };
 		}
 
-		for (int i = 0; i < height; i += 64) {
-			for (int j = 0; j < width; j += 64) {
-				int tile_h = std::min(height - i, 64);
-				int tile_w = std::min(width - j, 64);
+		for (int i = 0; i < height; i += TILE_HEIGHT) {
+			for (int j = 0; j < width; j += TILE_WIDTH) {
+				int tile_h = std::min(height - i, TILE_HEIGHT);
+				int tile_w = std::min(width - j, TILE_WIDTH);
 
 				for (int p = 0; p < 3; ++p) {
-					src_tiles[p].ptr = (char *)src[p] + i * dst_stride[p] + j * pxsize;
-					dst_tiles[p].ptr = (char *)dst[p] + i * dst_stride[p] + j * pxsize;
+					src_tiles[p] = src_plane_tiles[p].sub_tile(i, j);
+					dst_tiles[p] = dst_plane_tiles[p].sub_tile(i, j);
 
-					src_tiles[p].width = tile_w;
-					src_tiles[p].height = tile_h;
+					src_tiles[p].width() = tile_w;
+					src_tiles[p].height() = tile_h;
 
-					dst_tiles[p].width = tile_w;
-					dst_tiles[p].height = tile_h;
+					dst_tiles[p].width() = tile_w;
+					dst_tiles[p].height() = tile_h;
 				}
 
 				ctx->p.process_tile(src_tiles, dst_tiles, tmp);
@@ -352,11 +354,11 @@ int zimg_depth_process(zimg_depth_context *ctx, const void *src, void *dst, void
 	zimg_clear_last_error();
 
 	try {
-		PixelFormat src_format{ get_pixel_type(pixel_in), depth_in, !!fullrange_in, !!chroma };
-		PixelFormat dst_format{ get_pixel_type(pixel_out), depth_out, !!fullrange_out, !!chroma };
+		PlaneDescriptor src_desc{ { get_pixel_type(pixel_in), depth_in, !!fullrange_in, !!chroma }, width, height };
+		PlaneDescriptor dst_desc{ { get_pixel_type(pixel_out), depth_out, !!fullrange_out, !!chroma }, width, height };
 
-		ImageTile src_tile{ (void *)src, src_stride, width, height, src_format };
-		ImageTile dst_tile{ dst, dst_stride, width, height, dst_format };
+		ImageTile<const void> src_tile{ src, &src_desc, src_stride, width, height };
+		ImageTile<void> dst_tile{ dst, &dst_desc, dst_stride, width, height };
 
 		ctx->p.process_tile(src_tile, dst_tile, tmp);
 	} catch (const ZimgException &e) {
@@ -464,18 +466,29 @@ int zimg_resize_process(zimg_resize_context *ctx, const void *src, void *dst, vo
 		PixelType type = get_pixel_type(pixel_type);
 		int tmp_stride = ceil_n(ctx->tmp_width * pixel_size(type), ALIGNMENT);
 
-		ImageTile src_tile{ (void *)src, src_stride, src_width, src_height, default_pixel_format(type) };
-		ImageTile dst_tile{ (void *)dst, dst_stride, dst_width, dst_height, default_pixel_format(type) };
+		PlaneDescriptor desc{ type };
+
+		ImageTile<const void> src_tile{ src, &desc, src_stride, src_width, src_height };
+		ImageTile<void> dst_tile{ dst, &desc, dst_stride, dst_width, dst_height };
+
+		int top, left, bottom, right;
 
 		if (!ctx->pass1 && !ctx->pass2) {
 			copy_image_tile(src_tile, dst_tile);
 		} else if (ctx->pass1 && !ctx->pass2) {
+			ctx->pass1->dependent_rect(0, 0, dst_height, dst_width, &top, &left, &bottom, &right);
+			src_tile = src_tile.sub_tile(top, left);
 			ctx->pass1->process(src_tile, dst_tile, 0, 0, tmp);
 		} else {
-			ImageTile tmp_tile{ tmp, tmp_stride, ctx->tmp_width, ctx->tmp_height, default_pixel_format(type) };
+			ImageTile<void> tmp_tile{ tmp, &desc, tmp_stride, ctx->tmp_width, ctx->tmp_height };
 			tmp = (char *)tmp + (size_t)tmp_stride * ctx->tmp_height;
 
+			ctx->pass1->dependent_rect(0, 0, ctx->tmp_height, ctx->tmp_width, &top, &left, &bottom, &right);
+			src_tile = src_tile.sub_tile(top, left);
 			ctx->pass1->process(src_tile, tmp_tile, 0, 0, tmp);
+
+			ctx->pass2->dependent_rect(0, 0, dst_height, dst_width, &top, &left, &bottom, &right);
+			tmp_tile = tmp_tile.sub_tile(top, left);
 			ctx->pass2->process(tmp_tile, dst_tile, 0, 0, tmp);
 		}
 	} catch (const ZimgException &e) {

@@ -18,11 +18,6 @@ namespace unresize {;
  */
 struct BilinearContext {
 	/**
-	 * Dimension of unresized image (N).
-	 */
-	int dst_width;
-
-	/**
 	 * Packed storage of (A') as row + offset.
 	 * The matrix is stored as a 2-D array of matrix_row_size rows
 	 * and dst_width columns.

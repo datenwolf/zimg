@@ -14,50 +14,50 @@ namespace {;
 
 class DepthConvertAVX2 : public DepthConvertX86 {
 public:
-	void byte_to_half(const ImageTile &src, const ImageTile &dst) const override
+	void byte_to_half(const ImageTile<const uint8_t> &src, const ImageTile<uint16_t> &dst) const override
 	{
-		auto cvt_avx2 = make_integer_to_float_avx2(src.format);
-		auto cvt = make_integer_to_float<uint8_t>(src.format);
+		auto cvt_avx2 = make_integer_to_float_avx2(src.descriptor()->format);
+		auto cvt = make_integer_to_float<uint8_t>(src.descriptor()->format);
 
-		process<uint8_t, uint16_t>(src, dst, UnpackByteAVX2{}, PackHalfAVX2{},
-		                           [=](__m256i x) { return float_to_half_avx2(cvt_avx2(x)); },
-		                           [=](uint8_t x) { return depth::float_to_half(cvt(x)); });
+		process(src, dst, UnpackByteAVX2{}, PackHalfAVX2{},
+		        [=](__m256i x) { return float_to_half_avx2(cvt_avx2(x)); },
+		        [=](uint8_t x) { return depth::float_to_half(cvt(x)); });
 	}
 
-	void byte_to_float(const ImageTile &src, const ImageTile &dst) const override
+	void byte_to_float(const ImageTile<const uint8_t> &src, const ImageTile<float> &dst) const override
 	{
-		auto cvt_avx2 = make_integer_to_float_avx2(src.format);
-		auto cvt = make_integer_to_float<uint8_t>(src.format);
+		auto cvt_avx2 = make_integer_to_float_avx2(src.descriptor()->format);
+		auto cvt = make_integer_to_float<uint8_t>(src.descriptor()->format);
 
-		process<uint8_t, float>(src, dst, UnpackByteAVX2{}, PackFloatAVX2{}, cvt_avx2, cvt);
+		process(src, dst, UnpackByteAVX2{}, PackFloatAVX2{}, cvt_avx2, cvt);
 	}
 
-	void word_to_half(const ImageTile &src, const ImageTile &dst) const override
+	void word_to_half(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst) const override
 	{
-		auto cvt_avx2 = make_integer_to_float_avx2(src.format);
-		auto cvt = make_integer_to_float<uint16_t>(src.format);
+		auto cvt_avx2 = make_integer_to_float_avx2(src.descriptor()->format);
+		auto cvt = make_integer_to_float<uint16_t>(src.descriptor()->format);
 
-		process<uint16_t, uint16_t>(src, dst, UnpackWordAVX2{}, PackHalfAVX2{},
-		                            [=](__m256i x) { return float_to_half_avx2(cvt_avx2(x)); },
-		                            [=](uint16_t x) { return depth::float_to_half(cvt(x)); });
+		process(src, dst, UnpackWordAVX2{}, PackHalfAVX2{},
+		        [=](__m256i x) { return float_to_half_avx2(cvt_avx2(x)); },
+		        [=](uint16_t x) { return depth::float_to_half(cvt(x)); });
 	}
 
-	void word_to_float(const ImageTile &src, const ImageTile &dst) const override
+	void word_to_float(const ImageTile<const uint16_t> &src, const ImageTile<float> &dst) const override
 	{
-		auto cvt_avx2 = make_integer_to_float_avx2(src.format);
-		auto cvt = make_integer_to_float<uint16_t>(src.format);
+		auto cvt_avx2 = make_integer_to_float_avx2(src.descriptor()->format);
+		auto cvt = make_integer_to_float<uint16_t>(src.descriptor()->format);
 
 		process<uint16_t, float>(src, dst, UnpackWordAVX2{}, PackFloatAVX2{}, cvt_avx2, cvt);
 	}
 
-	void half_to_float(const ImageTile &src, const ImageTile &dst) const override
+	void half_to_float(const ImageTile<const uint16_t> &src, const ImageTile<float> &dst) const override
 	{
-		process<uint16_t, float>(src, dst, UnpackHalfAVX2{}, PackFloatAVX2{}, half_to_float_avx2, depth::half_to_float);
+		process(src, dst, UnpackHalfAVX2{}, PackFloatAVX2{}, half_to_float_avx2, depth::half_to_float);
 	}
 
-	void float_to_half(const ImageTile &src, const ImageTile &dst) const override
+	void float_to_half(const ImageTile<const float> &src, const ImageTile<uint16_t> &dst) const override
 	{
-		process<float, uint16_t>(src, dst, UnpackFloatAVX2{}, PackHalfAVX2{}, float_to_half_avx2, depth::float_to_half);
+		process(src, dst, UnpackFloatAVX2{}, PackHalfAVX2{}, float_to_half_avx2, depth::float_to_half);
 	}
 };
 

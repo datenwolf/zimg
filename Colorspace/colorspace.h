@@ -14,7 +14,8 @@ namespace zimg {;
 enum class PixelType;
 enum class CPUClass;
 
-struct ImageTile;
+template <class T>
+class ImageTile;
 
 namespace colorspace {;
 
@@ -29,9 +30,9 @@ class ColorspaceConversion {
 	std::shared_ptr<PixelAdapter> m_pixel_adapter;
 	std::vector<std::shared_ptr<Operation>> m_operations;
 
-	void load_tile(const ImageTile &src, float *dst) const;
+	void load_tile(const ImageTile<const void> &src, float *dst) const;
 
-	void store_tile(float *src, const ImageTile &dst) const;
+	void store_tile(const float *src, const ImageTile<void> &dst) const;
 public:
 	/**
 	 * Initialize a null context. Cannot be used for execution.
@@ -69,11 +70,11 @@ public:
 	/**
 	 * Process a tile. The input and output pixel formats must match.
 	 *
-	 * @param src pointer to three input planes
-	 * @param dst pointer to three output planes
+	 * @param src pointer to three input tiles
+	 * @param dst pointer to three output tiles
 	 * @param tmp temporary buffer (@see ColorspaceConversion::tmp_size)
 	 */
-	void process_tile(const ImageTile src[3], const ImageTile dst[3], void *tmp) const;
+	void process_tile(const ImageTile<const void> src[3], const ImageTile<void> dst[3], void *tmp) const;
 };
 
 } // namespace colorspace

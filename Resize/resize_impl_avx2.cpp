@@ -127,12 +127,9 @@ inline FORCE_INLINE __m256i pack_i30_epi32(__m256i lo, __m256i hi)
 }
 
 template <bool DoLoop>
-void resize_tile_u16_h_avx2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n)
+void resize_tile_u16_h_avx2(const EvaluatedFilter &filter, const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int n)
 {
 	__m256i INT16_MIN_EPI16 = _mm256_set1_epi16(INT16_MIN);
-
-	TileView<const uint16_t> src_view{ src };
-	TileView<uint16_t> dst_view{ dst };
 
 	int filter_stride = filter.stride_i16();
 
@@ -141,35 +138,35 @@ void resize_tile_u16_h_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 
 	int left_base = filter_left[0];
 
-	for (int i = 0; i < floor_n(dst.height, 8); i += 8) {
-		const uint16_t *src_ptr0 = src_view[i + 0];
-		const uint16_t *src_ptr1 = src_view[i + 1];
-		const uint16_t *src_ptr2 = src_view[i + 2];
-		const uint16_t *src_ptr3 = src_view[i + 3];
-		const uint16_t *src_ptr4 = src_view[i + 4];
-		const uint16_t *src_ptr5 = src_view[i + 5];
-		const uint16_t *src_ptr6 = src_view[i + 6];
-		const uint16_t *src_ptr7 = src_view[i + 7];
+	for (int i = 0; i < floor_n(dst.height(), 8); i += 8) {
+		const uint16_t *src_ptr0 = src[i + 0];
+		const uint16_t *src_ptr1 = src[i + 1];
+		const uint16_t *src_ptr2 = src[i + 2];
+		const uint16_t *src_ptr3 = src[i + 3];
+		const uint16_t *src_ptr4 = src[i + 4];
+		const uint16_t *src_ptr5 = src[i + 5];
+		const uint16_t *src_ptr6 = src[i + 6];
+		const uint16_t *src_ptr7 = src[i + 7];
 
-		uint16_t *dst_ptr0 = dst_view[i + 0];
-		uint16_t *dst_ptr1 = dst_view[i + 1];
-		uint16_t *dst_ptr2 = dst_view[i + 2];
-		uint16_t *dst_ptr3 = dst_view[i + 3];
-		uint16_t *dst_ptr4 = dst_view[i + 4];
-		uint16_t *dst_ptr5 = dst_view[i + 5];
-		uint16_t *dst_ptr6 = dst_view[i + 6];
-		uint16_t *dst_ptr7 = dst_view[i + 7];
+		uint16_t *dst_ptr0 = dst[i + 0];
+		uint16_t *dst_ptr1 = dst[i + 1];
+		uint16_t *dst_ptr2 = dst[i + 2];
+		uint16_t *dst_ptr3 = dst[i + 3];
+		uint16_t *dst_ptr4 = dst[i + 4];
+		uint16_t *dst_ptr5 = dst[i + 5];
+		uint16_t *dst_ptr6 = dst[i + 6];
+		uint16_t *dst_ptr7 = dst[i + 7];
 
 		int j;
 
-		for (j = 0; j < dst.width; ++j) {
+		for (j = 0; j < dst.width(); ++j) {
 			__m256i accum = _mm256_setzero_si256();
 			__m256i cached[16];
 
 			const int16_t *filter_row = &filter_data[j * filter_stride];
 			int left = filter_left[j] - left_base;
 
-			if (left + filter_stride > src.width)
+			if (left + filter_stride > src.width())
 				break;
 
 			for (int k = 0; k < (DoLoop ? filter.width() : 16); k += 16) {
@@ -263,19 +260,14 @@ void resize_tile_u16_h_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 				_mm256_store_si256((__m256i *)&dst_ptr7[dst_j], packed);
 			}
 		}
-		resize_tile_h_scalar(filter, src, dst, 0, i, floor_n(j, 16), i + 8, dst.width, ScalarPolicy_U16{});
+		resize_tile_h_scalar(filter, src, dst, 0, i, floor_n(j, 16), i + 8, dst.width(), ScalarPolicy_U16{});
 	}
-	resize_tile_h_scalar(filter, src, dst, 0, floor_n(dst.height, 8), 0, dst.height, dst.width, ScalarPolicy_U16{});
+	resize_tile_h_scalar(filter, src, dst, 0, floor_n(dst.height(), 8), 0, dst.height(), dst.width(), ScalarPolicy_U16{});
 }
 
-template <bool DoLoop, class Policy>
-void resize_tile_fp_h_avx2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n, Policy policy)
+template <bool DoLoop, class T, class Policy>
+void resize_tile_fp_h_avx2(const EvaluatedFilter &filter, const ImageTile<const T> &src, const ImageTile<T> &dst, int n, Policy policy)
 {
-	typedef typename Policy::data_type data_type;
-
-	TileView<const data_type> src_view{ src };
-	TileView<data_type> dst_view{ dst };
-
 	int filter_stride = filter.stride();
 
 	const float *filter_data = &filter.data()[n * filter_stride];
@@ -283,35 +275,35 @@ void resize_tile_fp_h_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 
 	int left_base = filter_left[0];
 
-	for (int i = 0; i < floor_n(dst.height, 8); i += 8) {
-		const data_type *src_ptr0 = src_view[i + 0];
-		const data_type *src_ptr1 = src_view[i + 1];
-		const data_type *src_ptr2 = src_view[i + 2];
-		const data_type *src_ptr3 = src_view[i + 3];
-		const data_type *src_ptr4 = src_view[i + 4];
-		const data_type *src_ptr5 = src_view[i + 5];
-		const data_type *src_ptr6 = src_view[i + 6];
-		const data_type *src_ptr7 = src_view[i + 7];
+	for (int i = 0; i < floor_n(dst.height(), 8); i += 8) {
+		const T *src_ptr0 = src[i + 0];
+		const T *src_ptr1 = src[i + 1];
+		const T *src_ptr2 = src[i + 2];
+		const T *src_ptr3 = src[i + 3];
+		const T *src_ptr4 = src[i + 4];
+		const T *src_ptr5 = src[i + 5];
+		const T *src_ptr6 = src[i + 6];
+		const T *src_ptr7 = src[i + 7];
 
-		data_type *dst_ptr0 = dst_view[i + 0];
-		data_type *dst_ptr1 = dst_view[i + 1];
-		data_type *dst_ptr2 = dst_view[i + 2];
-		data_type *dst_ptr3 = dst_view[i + 3];
-		data_type *dst_ptr4 = dst_view[i + 4];
-		data_type *dst_ptr5 = dst_view[i + 5];
-		data_type *dst_ptr6 = dst_view[i + 6];
-		data_type *dst_ptr7 = dst_view[i + 7];
+		T *dst_ptr0 = dst[i + 0];
+		T *dst_ptr1 = dst[i + 1];
+		T *dst_ptr2 = dst[i + 2];
+		T *dst_ptr3 = dst[i + 3];
+		T *dst_ptr4 = dst[i + 4];
+		T *dst_ptr5 = dst[i + 5];
+		T *dst_ptr6 = dst[i + 6];
+		T *dst_ptr7 = dst[i + 7];
 
 		int j;
 
-		for (j = 0; j < dst.width; ++j) {
+		for (j = 0; j < dst.width(); ++j) {
 			__m256 accum = _mm256_setzero_ps();
 			__m256 cached[8];
 
 			const float *filter_row = &filter_data[j * filter_stride];
 			int left = filter_left[j] - left_base;
 
-			if (left + filter_stride > src.width)
+			if (left + filter_stride > src.width())
 				break;
 
 			for (int k = 0; k < (DoLoop ? filter.width() : 8); k += 8) {
@@ -372,17 +364,14 @@ void resize_tile_fp_h_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 				policy.store_8(&dst_ptr7[dst_j], cached[7]);
 			}
 		}
-		resize_tile_h_scalar(filter, src, dst, 0, i, floor_n(j, 8), i + 8, dst.width, policy);
+		resize_tile_h_scalar(filter, src, dst, 0, i, floor_n(j, 8), i + 8, dst.width(), policy);
 	}
-	resize_tile_h_scalar(filter, src, dst, 0, floor_n(dst.height, 8), 0, dst.height, dst.width, policy);
+	resize_tile_h_scalar(filter, src, dst, 0, floor_n(dst.height(), 8), 0, dst.height(), dst.width(), policy);
 }
 
-void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n, uint32_t *tmp)
+void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int n, uint32_t *tmp)
 {
 	__m256i INT16_MIN_EPI16 = _mm256_set1_epi16(INT16_MIN);
-
-	TileView<const uint16_t> src_view{ src };
-	TileView<uint16_t> dst_view{ dst };
 
 	int filter_stride = filter.stride_i16();
 
@@ -391,20 +380,20 @@ void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 
 	int top_base = filter_left[0];
 
-	for (int i = 0; i < dst.height; ++i) {
+	for (int i = 0; i < dst.height(); ++i) {
 		const int16_t *filter_row = &filter_data[i * filter_stride];
 		int top = filter_left[i] - top_base;
-		uint16_t *dst_ptr = dst_view[i];
+		uint16_t *dst_ptr = dst[i];
 
 		for (int k = 0; k < floor_n(filter.width(), 8); k += 8) {
-			const uint16_t *src_ptr0 = src_view[top + k + 0];
-			const uint16_t *src_ptr1 = src_view[top + k + 1];
-			const uint16_t *src_ptr2 = src_view[top + k + 2];
-			const uint16_t *src_ptr3 = src_view[top + k + 3];
-			const uint16_t *src_ptr4 = src_view[top + k + 4];
-			const uint16_t *src_ptr5 = src_view[top + k + 5];
-			const uint16_t *src_ptr6 = src_view[top + k + 6];
-			const uint16_t *src_ptr7 = src_view[top + k + 7];
+			const uint16_t *src_ptr0 = src[top + k + 0];
+			const uint16_t *src_ptr1 = src[top + k + 1];
+			const uint16_t *src_ptr2 = src[top + k + 2];
+			const uint16_t *src_ptr3 = src[top + k + 3];
+			const uint16_t *src_ptr4 = src[top + k + 4];
+			const uint16_t *src_ptr5 = src[top + k + 5];
+			const uint16_t *src_ptr6 = src[top + k + 6];
+			const uint16_t *src_ptr7 = src[top + k + 7];
 
 			__m256i coeff0 = _mm256_set1_epi16(filter_row[k + 0]);
 			__m256i coeff1 = _mm256_set1_epi16(filter_row[k + 1]);
@@ -420,7 +409,7 @@ void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 			__m256i coeff45 = _mm256_unpacklo_epi16(coeff4, coeff5);
 			__m256i coeff67 = _mm256_unpacklo_epi16(coeff6, coeff7);
 
-			for (int j = 0; j < floor_n(dst.width, 16); j += 16) {
+			for (int j = 0; j < floor_n(dst.width(), 16); j += 16) {
 				__m256i x0, x1, x2, x3, x4, x5, x6, x7;
 				__m256i packed;
 
@@ -475,13 +464,13 @@ void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 			int m = filter.width() % 8;
 			int k = filter.width() - m;
 
-			const uint16_t *src_ptr0 = src_view[top + k + 0];
-			const uint16_t *src_ptr1 = src_view[top + k + 1];
-			const uint16_t *src_ptr2 = src_view[top + k + 2];
-			const uint16_t *src_ptr3 = src_view[top + k + 3];
-			const uint16_t *src_ptr4 = src_view[top + k + 4];
-			const uint16_t *src_ptr5 = src_view[top + k + 5];
-			const uint16_t *src_ptr6 = src_view[top + k + 6];
+			const uint16_t *src_ptr0 = src[top + k + 0];
+			const uint16_t *src_ptr1 = src[top + k + 1];
+			const uint16_t *src_ptr2 = src[top + k + 2];
+			const uint16_t *src_ptr3 = src[top + k + 3];
+			const uint16_t *src_ptr4 = src[top + k + 4];
+			const uint16_t *src_ptr5 = src[top + k + 5];
+			const uint16_t *src_ptr6 = src[top + k + 6];
 
 			__m256i coeff0 = _mm256_set1_epi16(filter_row[k + 0]);
 			__m256i coeff1 = _mm256_set1_epi16(filter_row[k + 1]);
@@ -497,7 +486,7 @@ void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 			__m256i coeff45 = _mm256_unpacklo_epi16(coeff4, coeff5);
 			__m256i coeff67 = _mm256_unpacklo_epi16(coeff6, coeff7);
 
-			for (ptrdiff_t j = 0; j < floor_n(dst.width, 16); j += 16) {
+			for (ptrdiff_t j = 0; j < floor_n(dst.width(), 16); j += 16) {
 				__m256i x0, x1, x2, x3, x4, x5, x6, x7;
 				__m256i packed;
 
@@ -549,18 +538,13 @@ void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile &src,
 				_mm256_store_si256((__m256i *)&dst_ptr[j], packed);
 			}
 		}
-		resize_tile_v_scalar(filter, src, dst, 0, i, floor_n(dst.width, 16), i + 1, dst.width, ScalarPolicy_U16{});
+		resize_tile_v_scalar(filter, src, dst, 0, i, floor_n(dst.width(), 16), i + 1, dst.width(), ScalarPolicy_U16{});
 	}
 }
 
-template <class Policy>
-void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n, Policy policy)
+template <class T, class Policy>
+void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile<const T> &src, const ImageTile<T> &dst, int n, Policy policy)
 {
-	typedef typename Policy::data_type data_type;
-
-	TileView<const data_type> src_view{ src };
-	TileView<data_type> dst_view{ dst };
-
 	int filter_stride = filter.stride();
 
 	const float *filter_data = &filter.data()[n * filter_stride];
@@ -568,20 +552,20 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 
 	int top_base = filter_left[0];
 
-	for (int i = 0; i < dst.height; ++i) {
+	for (int i = 0; i < dst.height(); ++i) {
 		const float *filter_row = &filter_data[i * filter_stride];
 		int top = filter_left[i] - top_base;
-		data_type *dst_ptr = dst_view[i];
+		T *dst_ptr = dst[i];
 
 		for (int k = 0; k < floor_n(filter.width(), 8); k += 8) {
-			const data_type *src_ptr0 = src_view[top + k + 0];
-			const data_type *src_ptr1 = src_view[top + k + 1];
-			const data_type *src_ptr2 = src_view[top + k + 2];
-			const data_type *src_ptr3 = src_view[top + k + 3];
-			const data_type *src_ptr4 = src_view[top + k + 4];
-			const data_type *src_ptr5 = src_view[top + k + 5];
-			const data_type *src_ptr6 = src_view[top + k + 6];
-			const data_type *src_ptr7 = src_view[top + k + 7];
+			const T *src_ptr0 = src[top + k + 0];
+			const T *src_ptr1 = src[top + k + 1];
+			const T *src_ptr2 = src[top + k + 2];
+			const T *src_ptr3 = src[top + k + 3];
+			const T *src_ptr4 = src[top + k + 4];
+			const T *src_ptr5 = src[top + k + 5];
+			const T *src_ptr6 = src[top + k + 6];
+			const T *src_ptr7 = src[top + k + 7];
 
 			__m256 coeff0 = _mm256_broadcast_ss(&filter_row[k + 0]);
 			__m256 coeff1 = _mm256_broadcast_ss(&filter_row[k + 1]);
@@ -592,7 +576,7 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 			__m256 coeff6 = _mm256_broadcast_ss(&filter_row[k + 6]);
 			__m256 coeff7 = _mm256_broadcast_ss(&filter_row[k + 7]);
 
-			for (int j = 0; j < floor_n(dst.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(dst.width(), 8); j += 8) {
 				__m256 x0, x1, x2, x3, x4, x5, x6, x7;
 				__m256 accum0, accum1, accum2, accum3;
 
@@ -634,13 +618,13 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 			int m = filter.width() % 8;
 			int k = filter.width() - m;
 
-			const data_type *src_ptr0 = src_view[top + k + 0];
-			const data_type *src_ptr1 = src_view[top + k + 1];
-			const data_type *src_ptr2 = src_view[top + k + 2];
-			const data_type *src_ptr3 = src_view[top + k + 3];
-			const data_type *src_ptr4 = src_view[top + k + 4];
-			const data_type *src_ptr5 = src_view[top + k + 5];
-			const data_type *src_ptr6 = src_view[top + k + 6];
+			const T *src_ptr0 = src[top + k + 0];
+			const T *src_ptr1 = src[top + k + 1];
+			const T *src_ptr2 = src[top + k + 2];
+			const T *src_ptr3 = src[top + k + 3];
+			const T *src_ptr4 = src[top + k + 4];
+			const T *src_ptr5 = src[top + k + 5];
+			const T *src_ptr6 = src[top + k + 6];
 
 			__m256 coeff0 = _mm256_broadcast_ss(&filter_row[k + 0]);
 			__m256 coeff1 = _mm256_broadcast_ss(&filter_row[k + 1]);
@@ -650,7 +634,7 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 			__m256 coeff5 = _mm256_broadcast_ss(&filter_row[k + 5]);
 			__m256 coeff6 = _mm256_broadcast_ss(&filter_row[k + 6]);
 
-			for (int j = 0; j < floor_n(dst.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(dst.width(), 8); j += 8) {
 				__m256 x0, x1, x2, x3, x4, x5, x6;
 
 				__m256 accum0 = _mm256_setzero_ps();
@@ -692,7 +676,7 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile &src, 
 				policy.store_8(&dst_ptr[j], accum0);
 			}
 		}
-		resize_tile_v_scalar(filter, src, dst, 0, i, floor_n(dst.width, 8), i + 1, dst.width, policy);
+		resize_tile_v_scalar(filter, src, dst, 0, i, floor_n(dst.width(), 8), i + 1, dst.width(), policy);
 	}
 }
 
@@ -701,7 +685,7 @@ public:
 	ResizeImplH_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter, true)
 	{}
 
-	void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		if (m_filter.width() > 16)
 			resize_tile_u16_h_avx2<true>(m_filter, src, dst, j);
@@ -709,7 +693,7 @@ public:
 			resize_tile_u16_h_avx2<false>(m_filter, src, dst, j);
 	}
 
-	void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		if (m_filter.width() > 8)
 			resize_tile_fp_h_avx2<true>(m_filter, src, dst, j, VectorPolicy_F16{});
@@ -717,7 +701,7 @@ public:
 			resize_tile_fp_h_avx2<false>(m_filter, src, dst, j, VectorPolicy_F16{});
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
 	{
 		if (m_filter.width() >= 8)
 			resize_tile_fp_h_avx2<true>(m_filter, src, dst, j, VectorPolicy_F32{});
@@ -731,16 +715,16 @@ public:
 	ResizeImplV_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter, false)
 	{}
 
-	void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		resize_tile_u16_v_avx2(m_filter, src, dst, i, (uint32_t *)tmp);
 	}
-	void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		resize_tile_fp_v_avx2(m_filter, src, dst, i, VectorPolicy_F16{});
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
 	{
 		resize_tile_fp_v_avx2(m_filter, src, dst, i, VectorPolicy_F32{});
 	}

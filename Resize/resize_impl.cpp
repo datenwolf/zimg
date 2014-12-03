@@ -15,21 +15,21 @@ public:
 	ResizeImplH_C(const EvaluatedFilter &filter) : ResizeImpl(filter, true)
 	{}
 
-	void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		const EvaluatedFilter &filter = m_filter;
-		resize_tile_h_scalar(filter, src, dst, j, 0, 0, dst.height, dst.width, ScalarPolicy_U16{});
+		resize_tile_h_scalar(filter, src, dst, j, 0, 0, dst.height(), dst.width(), ScalarPolicy_U16{});
 	}
 
-	void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
 	{
 		const EvaluatedFilter &filter = m_filter;
-		resize_tile_h_scalar(filter, src, dst, j, 0, 0, dst.height, dst.width, ScalarPolicy_F32{});
+		resize_tile_h_scalar(filter, src, dst, j, 0, 0, dst.height(), dst.width(), ScalarPolicy_F32{});
 	}
 };
 
@@ -38,21 +38,21 @@ public:
 	ResizeImplV_C(const EvaluatedFilter &filter) : ResizeImpl(filter, false)
 	{}
 
-	void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		const EvaluatedFilter &filter = m_filter;
-		resize_tile_v_scalar(filter, src, dst, i, 0, 0, dst.height, dst.width, ScalarPolicy_U16{});
+		resize_tile_v_scalar(filter, src, dst, i, 0, 0, dst.height(), dst.width(), ScalarPolicy_U16{});
 	}
 
-	void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
 	{
 		const EvaluatedFilter &filter = m_filter;
-		resize_tile_v_scalar(filter, src, dst, i, 0, 0, dst.height, dst.width, ScalarPolicy_F32{});
+		resize_tile_v_scalar(filter, src, dst, i, 0, 0, dst.height(), dst.width(), ScalarPolicy_F32{});
 	}
 };
 

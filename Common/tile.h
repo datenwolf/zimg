@@ -5,120 +5,222 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <type_traits>
 #include "pixel.h"
 
 namespace zimg {;
 
+const int TILE_WIDTH = 64;
+const int TILE_HEIGHT = 64;
+
 /**
- * Descriptor for a buffer containing image data.
+ * Descriptor for plane-level metadata.
  */
-struct ImageTile {
-	/**
-	 * Pointer to top-left pixel.
-	 */
-	void *ptr;
-
-	/**
-	 * Distance between scanlines in bytes.
-	 */
-	int byte_stride;
-
-	/**
-	 * Width of tile.
-	 */
+struct PlaneDescriptor {
+	PixelFormat format;
+	int bytes_per_pixel;
 	int width;
-
-	/**
-	 * Height of tile.
-	 */
 	int height;
 
-	/**
-	 * Descriptor for image pixels.
-	 */
-	PixelFormat format;
+	PlaneDescriptor() = default;
+
+	PlaneDescriptor(PixelType type, int width = 0, int height = 0) :
+		PlaneDescriptor{ default_pixel_format(type), width, height }
+	{
+	}
+
+	PlaneDescriptor(PixelFormat format, int width = 0, int height = 0) :
+		format(format),
+		bytes_per_pixel{ pixel_size(format.type) },
+		width{ width },
+		height{ height }
+	{
+	}
 };
 
 /**
- * Helper class for indexing into image data.
+ * Wrapper around an image tile.
  *
- * @param T data type of pixel
+ * @param T type of pixel data
  */
 template <class T>
-class TileView {
-	T *m_ptr;
-	int m_byte_stride;
+class ImageTile {
+	typedef typename std::add_const<T>::type const_type;
+	typedef typename std::remove_const<T>::type non_const_type;
 
-	T *index(int i, int j)
+	T *m_ptr;
+	const PlaneDescriptor *m_descriptor;
+	int m_byte_stride;
+	int m_width;
+	int m_height;
+
+	template <class U = T>
+	int x_bytes_per_pixel(typename std::enable_if<std::is_void<U>::value>::type *x = nullptr) const
 	{
-		return const_cast<T *>(const_cast<const TileView *>(this)->index(i, j));
+		return m_descriptor->bytes_per_pixel;
 	}
 
-	const T *index(int i, int j) const
+	template <class U = T>
+	int x_bytes_per_pixel(typename std::enable_if<!std::is_void<U>::value>::type *x = nullptr) const
+	{
+		return (int)sizeof(U);
+	}
+
+	T *address_of(int i, int j) const
 	{
 		const char *byte_ptr = reinterpret_cast<const char *>(m_ptr);
-		ptrdiff_t row_offset = (ptrdiff_t)i * m_byte_stride;
-		ptrdiff_t col_offset = (ptrdiff_t)j * sizeof(T);
 
-		return reinterpret_cast<const T *>(byte_ptr + row_offset + col_offset);
-	}
+		byte_ptr += static_cast<ptrdiff_t>(i) * m_byte_stride;
+		byte_ptr += static_cast<ptrdiff_t>(j) * bytes_per_pixel();
 
-	TileView(T *ptr, int byte_stride) : m_ptr{ ptr }, m_byte_stride{ byte_stride }
-	{
+		return const_cast<T *>(reinterpret_cast<const_type *>(byte_ptr));
 	}
 public:
 	/**
-	 * Construct a view from a tile.
-	 *
-	 * @param tile tile
+	 * Default construct tile. Values are uninitialized.
 	 */
-	explicit TileView(const ImageTile &tile) : TileView{ (T *)tile.ptr, tile.byte_stride }
+	ImageTile() = default;
+
+	/**
+	 * Initialize a image tile.
+	 *
+	 * @param ptr pointer to top-left pixel in tile
+	 * @param descriptor pointer to descriptor for plane containing tile, mandatory for non-void T
+	 * @param byte_stride distaince between image scanlines in bytes
+	 * @param width width of tile
+	 * @param height height of tile
+	 */
+	ImageTile(T *ptr, const PlaneDescriptor *descriptor, int byte_stride, int width = TILE_WIDTH, int height = TILE_HEIGHT) :
+		m_ptr{ ptr },
+		m_descriptor{ descriptor },
+		m_byte_stride{ byte_stride },
+		m_width{ width },
+		m_height{ height }
 	{
 	}
 
 	/**
-	 * Get pointer to image row.
+	 * Initialize a const tile from a non-const tile.
 	 *
-	 * @param i row
-	 * @return pointer to row
+	 * @param other non-const tile
 	 */
-	T *operator[](int i)
+	template <class U>
+	ImageTile(const ImageTile<U> &other,
+	          typename std::enable_if<std::is_same<T, const_type>::value &&
+	                                  !std::is_same<U, const_type>::value>::type *x = nullptr) :
+		m_ptr{ const_cast<T *>(other.data()) },
+		m_descriptor{ other.descriptor() },
+		m_byte_stride{ other.byte_stride() },
+		m_width{ other.width() },
+		m_height{ other.height() }
 	{
-		return index(i, 0);
 	}
 
 	/**
-	 * Get read-only pointer to image row.
-	 *
-	 * @see TileView::operator[](unsigned)
+	 * @return pointer to top-left pixel
 	 */
-	const T *operator[](int i) const
+	T *data() const
 	{
-		return index(i, 0);
+		return m_ptr;
 	}
 
 	/**
-	 * Get view centered on a subregion of the tile.
-	 *
-	 * @param i row
-	 * @param j column
-	 * @return view centered on offset
+	 * @return pointer to descriptor
 	 */
-	TileView<T> sub_view(int i, int j)
+	const PlaneDescriptor *descriptor() const
 	{
-		return{ index(i, j), m_byte_stride };
+		return m_descriptor;
 	}
 
 	/**
-	 * Get read-only view centered on a subregion of the tile.
-	 *
-	 * @see TileView::sub_view(unsigned, unsigned)
+	 * @return stride in bytes
 	 */
-	TileView<const T> sub_view(int i, int j) const
+	int byte_stride() const
 	{
-		return{ index(i, j), m_byte_stride };
+		return m_byte_stride;
+	}
+
+	/**
+	 * @return reference to width of tile
+	 */
+	int &width()
+	{
+		return m_width;
+	}
+
+	/**
+	 * @return reference to height of tile
+	 */
+	int &height()
+	{
+		return m_height;
+	}
+
+	/**
+	 * @return width of tile
+	 */
+	int width() const
+	{
+		return m_width;
+	}
+
+	/**
+	 * @return height of tile
+	 */
+	int height() const
+	{
+		return m_height;
+	}
+
+	/**
+	 * Get the size in bytes of a pixel.
+	 *
+	 * @return size of pixel
+	 */
+	int bytes_per_pixel() const
+	{
+		return x_bytes_per_pixel();
+	}
+
+	/**
+	 * Get the distance between image scanlines in pixels.
+	 *
+	 * @return stride in pixels
+	 */
+	int pixel_stride() const
+	{
+		return m_byte_stride / bytes_per_pixel();
+	}
+
+	/**
+	 * Get a pointer to a scanline.
+	 *
+	 * @param i row index
+	 * @return pointer to left pixel of scanline
+	 */
+	T *operator[](int i) const
+	{
+		return address_of(i, 0);
+	}
+
+	/**
+	 * Get a tile pointing to an offset within the tile.
+	 *
+	 * @param i row offset
+	 * @param j column offset
+	 * @return tile pointing to offset
+	 */
+	ImageTile sub_tile(int i, int j) const
+	{
+		return{ address_of(i, j), m_descriptor, m_byte_stride, m_width - j, m_height - i };
 	}
 };
+
+template <class T, class U>
+ImageTile<T> tile_cast(const ImageTile<U> &tile)
+{
+	return{ static_cast<T *>(tile.data()), tile.descriptor(), tile.byte_stride(), tile.width(), tile.height() };
+}
 
 /**
  * Copy an image tile. The tiles must have identical dimensions and formats.
@@ -126,16 +228,15 @@ public:
  * @param src input tile
  * @param dst output tile
  */
-inline void copy_image_tile(const ImageTile &src, const ImageTile &dst)
+template <class T>
+inline void copy_image_tile(const ImageTile<const T> &src, const ImageTile<T> &dst)
 {
-	int h = dst.height;
-	int w = dst.width * pixel_size(dst.format.type);
+	for (int i = 0; i < src.height(); ++i) {
+		const char *src_ptr = reinterpret_cast<const char *>(src[i]);
+		char *dst_ptr = reinterpret_cast<char *>(dst[i]);
+		int line_size = src.width() * src.bytes_per_pixel();
 
-	for (int i = 0; i < h; ++i) {
-		const char *src_ptr = (const char *)src.ptr + i * src.byte_stride;
-		char *dst_ptr = (char *)dst.ptr + i * dst.byte_stride;
-		
-		std::copy_n(src_ptr, w, dst_ptr);
+		std::copy_n(src_ptr, line_size, dst_ptr);
 	}
 }
 

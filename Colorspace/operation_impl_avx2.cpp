@@ -30,16 +30,13 @@ inline FORCE_INLINE float half_to_float(uint16_t x)
 
 class PixelAdapterAVX2 : public PixelAdapter {
 public:
-	void f16_to_f32(const ImageTile &src, const ImageTile &dst) const override
+	void f16_to_f32(const ImageTile<const uint16_t> &src, const ImageTile<float> &dst) const override
 	{
-		TileView<const uint16_t> src_view{ src };
-		TileView<float> dst_view{ dst };
+		for (int i = 0; i < src.height(); ++i) {
+			const uint16_t *src_ptr = src[i];
+			float *dst_ptr = dst[i];
 
-		for (int i = 0; i < src.height; ++i) {
-			const uint16_t *src_ptr = src_view[i];
-			float *dst_ptr = dst_view[i];
-
-			for (int j = 0; j < floor_n(src.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(src.width(), 8); j += 8) {
 				__m128i f16;
 				__m256 f32;
 
@@ -48,22 +45,19 @@ public:
 
 				_mm256_store_ps(&dst_ptr[j], f32);
 			}
-			for (int j = floor_n(src.width, 8); j < src.width; ++j) {
+			for (int j = floor_n(src.width(), 8); j < src.width(); ++j) {
 				dst_ptr[j] = half_to_float(src_ptr[j]);
 			}
 		}
 	}
 
-	void f32_to_f16(const ImageTile &src, const ImageTile &dst) const override
+	void f32_to_f16(const ImageTile<const float> &src, const ImageTile<uint16_t> &dst) const override
 	{
-		TileView<const float> src_view{ src };
-		TileView<uint16_t> dst_view{ dst };
+		for (int i = 0; i < src.height(); ++i) {
+			const float *src_ptr = src[i];
+			uint16_t *dst_ptr = dst[i];
 
-		for (int i = 0; i < src.height; ++i) {
-			const float *src_ptr = src_view[i];
-			uint16_t *dst_ptr = dst_view[i];
-
-			for (int j = 0; j < floor_n(src.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(src.width(), 8); j += 8) {
 				__m128i f16;
 				__m256 f32;
 
@@ -72,7 +66,7 @@ public:
 
 				_mm_store_si128((__m128i *)&dst_ptr[j], f16);
 			}
-			for (int j = floor_n(src.width, 8); j < src.width; ++j) {
+			for (int j = floor_n(src.width(), 8); j < src.width(); ++j) {
 				dst_ptr[j] = float_to_half(src_ptr[j]);
 			}
 		}

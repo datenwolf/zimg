@@ -16,16 +16,16 @@ public:
 	UnresizeImplH_C(const BilinearContext &context) : UnresizeImpl(context)
 	{}
 
-	void process_f16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, void *tmp) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, void *tmp) const override
 	{
-		for (int i = 0; i < dst.height; ++i) {
-			filter_scanline_h_forward(m_context, src, (float *)tmp, i, 0, m_context.dst_width, ScalarPolicy_F32{});
-			filter_scanline_h_back(m_context, (const float *)tmp, dst, i, m_context.dst_width, 0, ScalarPolicy_F32{});
+		for (int i = 0; i < dst.descriptor()->height; ++i) {
+			filter_scanline_h_forward(m_context, src, (float *)tmp, i, 0, dst.descriptor()->width, ScalarPolicy_F32{});
+			filter_scanline_h_back(m_context, (const float *)tmp, dst, i, dst.descriptor()->width, 0, ScalarPolicy_F32{});
 		}
 	}
 };
@@ -35,18 +35,18 @@ public:
 	UnresizeImplV_C(const BilinearContext &context) : UnresizeImpl(context)
 	{}
 
-	void process_f16(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, void *tmp) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in C impl" };
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, void *tmp) const override
 	{
-		for (int i = 0; i < m_context.dst_width; ++i) {
-			filter_scanline_v_forward(m_context, src, dst, i, 0, src.width, ScalarPolicy_F32{});
+		for (int i = 0; i < dst.descriptor()->height; ++i) {
+			filter_scanline_v_forward(m_context, src, dst, i, 0, dst.descriptor()->width, ScalarPolicy_F32{});
 		}
-		for (int i = m_context.dst_width; i > 0; --i) {
-			filter_scanline_v_back(m_context, dst, i, 0, src.width, ScalarPolicy_F32{});
+		for (int i = dst.descriptor()->height; i > 0; --i) {
+			filter_scanline_v_back(m_context, dst, i, 0, dst.descriptor()->width, ScalarPolicy_F32{});
 		}
 	}
 };

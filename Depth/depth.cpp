@@ -12,47 +12,89 @@ namespace depth {;
 
 namespace {;
 
-void convert_dithered(const DitherConvert &dither, const ImageTile &src, const ImageTile &dst, void *tmp)
+void convert_dithered(const DitherConvert &dither, const ImageTile<const void> &src, const ImageTile<void> &dst, void *tmp)
 {
-	PixelType src_type = src.format.type;
-	PixelType dst_type = dst.format.type;
+	PixelType src_type = src.descriptor()->format.type;
+	PixelType dst_type = dst.descriptor()->format.type;
 	float *tmp_f = (float *)tmp;
 
-	if (src_type == PixelType::BYTE && dst_type == PixelType::BYTE)
-		dither.byte_to_byte(src, dst, tmp_f);
-	else if (src_type == PixelType::BYTE && dst_type == PixelType::WORD)
-		dither.byte_to_word(src, dst, tmp_f);
-	else if (src_type == PixelType::WORD && dst_type == PixelType::BYTE)
-		dither.word_to_byte(src, dst, tmp_f);
-	else if (src_type == PixelType::WORD && dst_type == PixelType::WORD)
-		dither.word_to_word(src, dst, tmp_f);
-	else if (src_type == PixelType::HALF && dst_type == PixelType::BYTE)
-		dither.half_to_byte(src, dst, tmp_f);
-	else if (src_type == PixelType::HALF && dst_type == PixelType::WORD)
-		dither.half_to_word(src, dst, tmp_f);
-	else if (src_type == PixelType::FLOAT && dst_type == PixelType::BYTE)
-		dither.float_to_byte(src, dst, tmp_f);
-	else if (src_type == PixelType::FLOAT && dst_type == PixelType::WORD)
-		dither.float_to_word(src, dst, tmp_f);
+	if (dst_type == PixelType::BYTE) {
+		ImageTile<uint8_t> dst_b = tile_cast<uint8_t>(dst);
+
+		switch (src_type) {
+		case PixelType::BYTE:
+			dither.byte_to_byte(tile_cast<const uint8_t>(src), dst_b, tmp_f);
+			break;
+		case PixelType::WORD:
+			dither.word_to_byte(tile_cast<const uint16_t>(src), dst_b, tmp_f);
+			break;
+		case PixelType::HALF:
+			dither.half_to_byte(tile_cast<const uint16_t>(src), dst_b, tmp_f);
+			break;
+		case PixelType::FLOAT:
+			dither.float_to_byte(tile_cast<const float>(src), dst_b, tmp_f);
+			break;
+		}
+	} else if (dst_type == PixelType::WORD) {
+		ImageTile<uint16_t> dst_w = tile_cast<uint16_t>(dst);
+
+		switch (src_type) {
+		case PixelType::BYTE:
+			dither.byte_to_word(tile_cast<const uint8_t>(src), dst_w, tmp_f);
+			break;
+		case PixelType::WORD:
+			dither.word_to_word(tile_cast<const uint16_t>(src), dst_w, tmp_f);
+			break;
+		case PixelType::HALF:
+			dither.half_to_word(tile_cast<const uint16_t>(src), dst_w, tmp_f);
+			break;
+		case PixelType::FLOAT:
+			dither.float_to_word(tile_cast<const float>(src), dst_w, tmp_f);
+			break;
+		}
+	}
 }
 
-void convert_depth(const DepthConvert &depth, const ImageTile &src, const ImageTile &dst)
+void convert_depth(const DepthConvert &depth, const ImageTile<const void> &src, const ImageTile<void> &dst)
 {
-	PixelType src_type = src.format.type;
-	PixelType dst_type = dst.format.type;
+	PixelType src_type = src.descriptor()->format.type;
+	PixelType dst_type = dst.descriptor()->format.type;
 
-	if (src_type == PixelType::BYTE && dst_type == PixelType::HALF)
-		depth.byte_to_half(src, dst);
-	else if (src_type == PixelType::BYTE && dst_type == PixelType::FLOAT)
-		depth.byte_to_float(src, dst);
-	else if (src_type == PixelType::WORD && dst_type == PixelType::HALF)
-		depth.word_to_half(src, dst);
-	else if (src_type == PixelType::WORD && dst_type == PixelType::FLOAT)
-		depth.word_to_float(src, dst);
-	else if (src_type == PixelType::HALF && dst_type == PixelType::FLOAT)
-		depth.half_to_float(src, dst);
-	else if (src_type == PixelType::FLOAT && dst_type == PixelType::HALF)
-		depth.float_to_half(src, dst);
+	if (dst_type == PixelType::HALF) {
+		ImageTile<uint16_t> dst_w = tile_cast<uint16_t>(dst);
+
+		switch (src_type) {
+		case PixelType::BYTE:
+			depth.byte_to_half(tile_cast<const uint8_t>(src), dst_w);
+			break;
+		case PixelType::WORD:
+			depth.word_to_half(tile_cast<const uint16_t>(src), dst_w);
+			break;
+		case PixelType::HALF:
+			copy_image_tile(tile_cast<const uint16_t>(src), dst_w);
+			break;
+		case PixelType::FLOAT:
+			depth.float_to_half(tile_cast<const float>(src), dst_w);
+			break;
+		}
+	} else if (dst_type == PixelType::FLOAT) {
+		ImageTile<float> dst_f = tile_cast<float>(dst);
+
+		switch (src_type) {
+		case PixelType::BYTE:
+			depth.byte_to_float(tile_cast<const uint8_t>(src), dst_f);
+			break;
+		case PixelType::WORD:
+			depth.word_to_float(tile_cast<const uint16_t>(src), dst_f);
+			break;
+		case PixelType::HALF:
+			depth.half_to_float(tile_cast<const uint16_t>(src), dst_f);
+			break;
+		case PixelType::FLOAT:
+			copy_image_tile(tile_cast<const float>(src), dst_f);
+			break;
+		}
+	}
 }
 
 } // namespace
@@ -79,9 +121,9 @@ size_t Depth::tmp_size(int width) const
 	return m_error_diffusion ? ((size_t)width + 2) * 2 : 0;
 }
 
-void Depth::process_tile(const ImageTile &src, const ImageTile &dst, void *tmp) const
+void Depth::process_tile(const ImageTile<const void> &src, const ImageTile<void> &dst, void *tmp) const
 {
-	if (dst.format.type >= PixelType::HALF)
+	if (dst.descriptor()->format.type >= PixelType::HALF)
 		convert_depth(*m_depth, src, dst);
 	else
 		convert_dithered(*m_dither, src, dst, tmp);

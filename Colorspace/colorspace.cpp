@@ -37,24 +37,38 @@ try :
 	throw ZimgOutOfMemory{};
 }
 
-void ColorspaceConversion::load_tile(const ImageTile &src, float *dst) const
+void ColorspaceConversion::load_tile(const ImageTile<const void> &src, float *dst) const
 {
-	ImageTile dst_tile{ dst, ceil_n(src.width * (int)sizeof(float), ALIGNMENT), src.width, src.height, default_pixel_format(PixelType::FLOAT) };
+	PlaneDescriptor desc{ PixelType::FLOAT };
+	ImageTile<float> dst_tile{ dst, &desc, ceil_n(src.width() * (int)sizeof(float), ALIGNMENT), src.width(), src.height() };
 
-	if (src.format.type == PixelType::HALF)
-		m_pixel_adapter->f16_to_f32(src, dst_tile);
-	else if (src.format.type == PixelType::FLOAT)
-		copy_image_tile(src, dst_tile);
+	switch (src.descriptor()->format.type) {
+	case PixelType::HALF:
+		m_pixel_adapter->f16_to_f32(tile_cast<const uint16_t>(src), dst_tile);
+		break;
+	case PixelType::FLOAT:
+		copy_image_tile(tile_cast<const float>(src), dst_tile);
+		break;
+	default:
+		break;
+	}
 }
 
-void ColorspaceConversion::store_tile(float *src, const ImageTile &dst) const
+void ColorspaceConversion::store_tile(const float *src, const ImageTile<void> &dst) const
 {
-	ImageTile src_tile{ src, ceil_n(dst.width * (int)sizeof(float), ALIGNMENT), dst.width, dst.height, default_pixel_format(PixelType::FLOAT) };
+	PlaneDescriptor desc{ PixelType::FLOAT };
+	ImageTile<const float> src_tile{ src, &desc, ceil_n(dst.width() * (int)sizeof(float), ALIGNMENT), dst.width(), dst.height() };
 
-	if (dst.format.type == PixelType::HALF)
-		m_pixel_adapter->f32_to_f16(src_tile, dst);
-	else if (dst.format.type == PixelType::FLOAT)
-		copy_image_tile(src_tile, dst);
+	switch (dst.descriptor()->format.type) {
+	case PixelType::HALF:
+		m_pixel_adapter->f32_to_f16(src_tile, tile_cast<uint16_t>(dst));
+		break;
+	case PixelType::FLOAT:
+		copy_image_tile(src_tile, tile_cast<float>(dst));
+		break;
+	default:
+		break;
+	}
 }
 
 bool ColorspaceConversion::pixel_supported(PixelType type) const
@@ -68,9 +82,9 @@ size_t ColorspaceConversion::tmp_size(int width, int height) const
 	return 3 * stride * height;
 }
 
-void ColorspaceConversion::process_tile(const ImageTile src[3], const ImageTile dst[3], void *tmp) const
+void ColorspaceConversion::process_tile(const ImageTile<const void> src[3], const ImageTile<void> dst[3], void *tmp) const
 {
-	int tmp_tile_size = ceil_n(src[0].width, AlignmentOf<float>::value) * src[0].height;
+	int tmp_tile_size = ceil_n(src[0].width(), AlignmentOf<float>::value) * src[0].height();
 	float *tmp_ptr[3];
 
 	tmp_ptr[0] = (float *)tmp + 0 * tmp_tile_size;

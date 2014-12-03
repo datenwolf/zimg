@@ -11,7 +11,8 @@ namespace zimg {;
 enum class CPUClass;
 enum class PixelType;
 
-struct ImageTile;
+template <class T>
+class ImageTile;
 
 namespace depth {;
 
@@ -79,7 +80,7 @@ public:
 	 * @param tmp temporary buffer (@see Depth::tmp_size)
 	 * @see Depth::tile_supported
 	 */
-	void process_tile(const ImageTile &src, const ImageTile &dst, void *tmp) const;
+	void process_tile(const ImageTile<const void> &src, const ImageTile<void> &dst, void *tmp) const;
 };
 
 } // namespace depth

@@ -10,7 +10,8 @@ namespace zimg {;
 
 enum class CPUClass;
 
-struct ImageTile;
+template <class T>
+class ImageTile;
 
 namespace colorspace {;
 
@@ -34,14 +35,14 @@ public:
 	 * @param src input tile
 	 * @param dst output tile
 	 */
-	virtual void f16_to_f32(const ImageTile &src, const ImageTile &dst) const = 0;
+	virtual void f16_to_f32(const ImageTile<const uint16_t> &src, const ImageTile<float> &dst) const = 0;
 
 	/**
 	 * Convert from single precision to half precision.
 	 *
 	 * @see PixelAdapter::f16_to_f32
 	 */
-	virtual void f32_to_f16(const ImageTile &src, const ImageTile &dst) const = 0;
+	virtual void f32_to_f16(const ImageTile<const float> &src, const ImageTile<uint16_t> &dst) const = 0;
 };
 
 /**

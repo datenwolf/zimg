@@ -12,7 +12,8 @@ namespace zimg {;
 
 enum class CPUClass;
 
-struct ImageTile;
+template <class T>
+class ImageTile;
 
 namespace resize {;
 
@@ -57,15 +58,12 @@ struct ScalarPolicy_F32 {
 	FORCE_INLINE void store(float *dst, float x) { *dst = x; }
 };
 
-template <class Policy>
-inline FORCE_INLINE void resize_tile_h_scalar(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n,
+template <class T, class Policy>
+inline FORCE_INLINE void resize_tile_h_scalar(const EvaluatedFilter &filter, const ImageTile<const T> &src, const ImageTile<T> &dst, int n,
                                               int i_begin, int j_begin, int i_end, int j_end, Policy policy)
 {
 	typedef typename Policy::data_type data_type;
 	typedef typename Policy::num_type num_type;
-
-	TileView<const data_type> src_view{ src };
-	TileView<data_type> dst_view{ dst };
 
 	int left_base = filter.left()[n];
 	
@@ -78,25 +76,22 @@ inline FORCE_INLINE void resize_tile_h_scalar(const EvaluatedFilter &filter, con
 
 			for (int k = 0; k < filter.width(); ++k) {
 				num_type coeff = policy.coeff(filter, filter_row, k);
-				num_type x = policy.load(&src_view[i][left + k]);
+				num_type x = policy.load(&src[i][left + k]);
 
 				accum += coeff * x;
 			}
 
-			policy.store(&dst_view[i][j], accum);
+			policy.store(&dst[i][j], accum);
 		}
 	}
 }
 
-template <class Policy>
-inline FORCE_INLINE void resize_tile_v_scalar(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n,
+template <class T, class Policy>
+inline FORCE_INLINE void resize_tile_v_scalar(const EvaluatedFilter &filter, const ImageTile<const T> &src, const ImageTile<T> &dst, int n,
                                               int i_begin, int j_begin, int i_end, int j_end, Policy policy)
 {
 	typedef typename Policy::data_type data_type;
 	typedef typename Policy::num_type num_type;
-
-	TileView<const data_type> src_view{ src };
-	TileView<data_type> dst_view{ dst };
 
 	int top_base = filter.left()[n];
 
@@ -109,12 +104,12 @@ inline FORCE_INLINE void resize_tile_v_scalar(const EvaluatedFilter &filter, con
 
 			for (int k = 0; k < filter.width(); ++k) {
 				num_type coeff = policy.coeff(filter, filter_row, k);
-				num_type x = policy.load(&src_view[top + k][j]);
+				num_type x = policy.load(&src[top + k][j]);
 
 				accum += coeff * x;
 			}
 
-			policy.store(&dst_view[i][j], accum);
+			policy.store(&dst[i][j], accum);
 		}
 	}
 }
@@ -167,21 +162,21 @@ public:
 	 * @param tmp temporary buffer (implementation defined size)
 	 * @throws ZimgUnsupportedError if not supported
 	 */
-	virtual void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const = 0;
+	virtual void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const = 0;
 
 	/**
 	 * Execute filter pass on a half precision 16-bit image.
 	 *
 	 * @see ResizeImpl::process_u16_h
 	 */
-	virtual void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const = 0;
+	virtual void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const = 0;
 
 	/**
 	 * Execute filter pass on a single precision 32-bit image.
 	 *
 	 * @see ResizeImpl::process_u16_h
 	 */
-	virtual void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const = 0;
+	virtual void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const = 0;
 };
 
 /**

@@ -30,7 +30,7 @@ protected:
 	{}
 
 	template <class T, class U, class Policy, class Unpack, class Pack, class ToFloat, class FromFloat, class ToFloatScalar, class FromFloatScalar>
-	void process(const ImageTile &src, const ImageTile &dst, Policy policy, Unpack unpack, Pack pack,
+	void process(const ImageTile<const T> &src, const ImageTile<U> &dst, Policy policy, Unpack unpack, Pack pack,
 	             ToFloat to_float, FromFloat from_float, ToFloatScalar to_float_scalar, FromFloatScalar from_float_scalar) const
 	{
 		typedef typename Policy::type vector_type;
@@ -41,17 +41,15 @@ protected:
 		typedef Div<loop_step::value, Unpack::loop_step> loop_unroll_unpack;
 		typedef Div<loop_step::value, Pack::loop_step> loop_unroll_pack;
 
-		TileView<const T> src_view{ src };
-		TileView<U> dst_view{ dst };
-
 		const float *dither_data = m_dither.data();
+		int depth = dst.descriptor()->format.depth;
 
-		float scale = 1.0f / (float)(1 << (dst.format.depth - 1));
+		float scale = 1.0f / (float)(1 << (depth - 1));
 		vector_type scale_ps = policy.set1(scale);
 
-		for (int i = 0; i < src.height; ++i) {
-			const T *src_row = src_view[i];
-			U * dst_row = dst_view[i];
+		for (int i = 0; i < src.height(); ++i) {
+			const T *src_row = src[i];
+			U * dst_row = dst[i];
 
 			const float *dither_row = &dither_data[(i % NUM_DITHERS_V) * NUM_DITHERS_H];
 			int m = 0;
@@ -59,7 +57,7 @@ protected:
 			src_vector_type src_unpacked[loop_unroll_unpack::value * Unpack::unpacked_count];
 			dst_vector_type dst_unpacked[loop_unroll_pack::value * Pack::unpacked_count];
 
-			for (int j = 0; j < floor_n(src.width, loop_step::value); j += loop_step::value) {
+			for (int j = 0; j < floor_n(src.width(), loop_step::value); j += loop_step::value) {
 				for (int k = 0; k < loop_unroll_unpack::value; ++k) {
 					unpack.unpack(&src_unpacked[k * Unpack::unpacked_count], &src_row[j + k * Unpack::loop_step]);
 				}
@@ -83,7 +81,7 @@ protected:
 				m %= NUM_DITHERS_H;
 			}
 
-			for (int j = floor_n(src.width, loop_step::value); j < src.width; ++j) {
+			for (int j = floor_n(src.width(), loop_step::value); j < src.width(); ++j) {
 				float x = to_float_scalar(src_row[j]);
 				float d = dither_row[m++];
 

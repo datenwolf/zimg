@@ -12,6 +12,9 @@ namespace zimg {;
 
 enum class CPUClass;
 
+template <class T>
+class ImageTile;
+
 namespace depth {;
 
 class DepthConvert;
@@ -31,7 +34,7 @@ class DepthConvertX86 : public DepthConvert {
 	};
 protected:
 	template <class T, class U, class Unpack, class Pack, class VectorOp, class ScalarOp>
-	void process(const ImageTile &src, const ImageTile &dst, Unpack unpack, Pack pack, VectorOp op, ScalarOp scalar_op) const
+	void process(const ImageTile<const T> &src, const ImageTile<U> &dst, Unpack unpack, Pack pack, VectorOp op, ScalarOp scalar_op) const
 	{
 		typedef typename Unpack::type src_vector_type;
 		typedef typename Pack::type dst_vector_type;
@@ -40,17 +43,14 @@ protected:
 		typedef Div<loop_step::value, Unpack::loop_step> loop_unroll_unpack;
 		typedef Div<loop_step::value, Pack::loop_step> loop_unroll_pack;
 
-		TileView<const T> src_view{ src };
-		TileView<U> dst_view{ dst };
-
 		src_vector_type src_unpacked[loop_unroll_unpack::value * Unpack::unpacked_count];
 		dst_vector_type dst_unpacked[loop_unroll_pack::value * Pack::unpacked_count];
 
-		for (int i = 0; i < src.height; ++i) {
-			const T *src_ptr = src_view[i];
-			U *dst_ptr = dst_view[i];
+		for (int i = 0; i < src.height(); ++i) {
+			const T *src_ptr = src[i];
+			U *dst_ptr = dst[i];
 
-			for (int j = 0; j < floor_n(src.width, loop_step::value); j += loop_step::value) {
+			for (int j = 0; j < floor_n(src.width(), loop_step::value); j += loop_step::value) {
 				for (int k = 0; k < loop_unroll_unpack::value; ++k) {
 					unpack.unpack(&src_unpacked[k * Unpack::unpacked_count], &src_ptr[j + k * Unpack::loop_step]);
 				}
@@ -63,7 +63,7 @@ protected:
 					pack.pack(&dst_ptr[j + k * Pack::loop_step], &dst_unpacked[k * Pack::unpacked_count]);
 				}
 			}
-			for (int j = floor_n(src.width, loop_step::value); j < src.width; ++j) {
+			for (int j = floor_n(src.width(), loop_step::value); j < src.width(); ++j) {
 				dst_ptr[j] = scalar_op(src_ptr[j]);
 			}
 		}

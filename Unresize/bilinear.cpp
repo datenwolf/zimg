@@ -115,8 +115,6 @@ BilinearContext create_bilinear_context(int in, int out, double shift)
 	size_t rows = transpose_m.rows();
 	size_t cols = transpose_m.cols();
 
-	ctx.dst_width = in;
-
 	size_t rowsize = 0;
 	for (size_t i = 0; i < rows; ++i) {
 		rowsize = std::max(transpose_m.row_right(i) - transpose_m.row_left(i), rowsize);

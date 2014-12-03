@@ -87,12 +87,9 @@ inline FORCE_INLINE __m128i pack_i30_epi32(__m128i lo, __m128i hi)
 }
 
 template <bool DoLoop>
-void resize_tile_u16_h_sse2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n)
+void resize_tile_u16_h_sse2(const EvaluatedFilter &filter, const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int n)
 {
 	__m128i INT16_MIN_EPI16 = _mm_set1_epi16(INT16_MIN);
-
-	TileView<const uint16_t> src_view{ src };
-	TileView<uint16_t> dst_view{ dst };
 
 	int filter_stride = filter.stride_i16();
 
@@ -101,27 +98,27 @@ void resize_tile_u16_h_sse2(const EvaluatedFilter &filter, const ImageTile &src,
 
 	int left_base = filter_left[0];
 
-	for (int i = 0; i < floor_n(dst.height, 4); i += 4) {
-		const uint16_t *src_p0 = src_view[i + 0];
-		const uint16_t *src_p1 = src_view[i + 1];
-		const uint16_t *src_p2 = src_view[i + 2];
-		const uint16_t *src_p3 = src_view[i + 3];
+	for (int i = 0; i < floor_n(dst.height(), 4); i += 4) {
+		const uint16_t *src_p0 = src[i + 0];
+		const uint16_t *src_p1 = src[i + 1];
+		const uint16_t *src_p2 = src[i + 2];
+		const uint16_t *src_p3 = src[i + 3];
 
-		uint16_t *dst_p0 = dst_view[i + 0];
-		uint16_t *dst_p1 = dst_view[i + 1];
-		uint16_t *dst_p2 = dst_view[i + 2];
-		uint16_t *dst_p3 = dst_view[i + 3];
+		uint16_t *dst_p0 = dst[i + 0];
+		uint16_t *dst_p1 = dst[i + 1];
+		uint16_t *dst_p2 = dst[i + 2];
+		uint16_t *dst_p3 = dst[i + 3];
 
 		int j;
 
-		for (j = 0; j < dst.width; ++j) {
+		for (j = 0; j < dst.width(); ++j) {
 			__m128i accum = _mm_setzero_si128();
 			__m128i cached[8];
 
 			const int16_t *filter_row = &filter_data[j * filter_stride];
 			int left = filter_left[j] - left_base;
 
-			if (left + filter_stride > src.width)
+			if (left + filter_stride > src.width())
 				break;
 
 			for (int k = 0; k < (DoLoop ? filter.width() : 8); k += 8) {
@@ -178,17 +175,14 @@ void resize_tile_u16_h_sse2(const EvaluatedFilter &filter, const ImageTile &src,
 				_mm_store_si128((__m128i *)&dst_p3[dst_j], packed);
 			}
 		}
-		resize_tile_h_scalar(filter, src, dst, n, i, floor_n(j, 8), i + 4, dst.width, ScalarPolicy_U16{});
+		resize_tile_h_scalar(filter, src, dst, n, i, floor_n(j, 8), i + 4, dst.width(), ScalarPolicy_U16{});
 	}
-	resize_tile_h_scalar(filter, src, dst, n, floor_n(dst.height, 4), 0, dst.height, dst.width, ScalarPolicy_U16{});
+	resize_tile_h_scalar(filter, src, dst, n, floor_n(dst.height(), 4), 0, dst.height(), dst.width(), ScalarPolicy_U16{});
 }
 
 template <bool DoLoop>
-void resize_tile_fp_h_sse2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n)
+void resize_tile_fp_h_sse2(const EvaluatedFilter &filter, const ImageTile<const float> &src, const ImageTile<float> &dst, int n)
 {
-	TileView<const float > src_view{ src };
-	TileView<float> dst_view{ dst };
-
 	int filter_stride = filter.stride();
 
 	const float *filter_data = &filter.data()[n * filter_stride];
@@ -196,27 +190,27 @@ void resize_tile_fp_h_sse2(const EvaluatedFilter &filter, const ImageTile &src, 
 
 	int left_base = filter_left[0];
 
-	for (int i = 0; i < floor_n(dst.height, 4); i += 4) {
-		const float *src_p0 = src_view[i + 0];
-		const float *src_p1 = src_view[i + 1];
-		const float *src_p2 = src_view[i + 2];
-		const float *src_p3 = src_view[i + 3];
+	for (int i = 0; i < floor_n(dst.height(), 4); i += 4) {
+		const float *src_p0 = src[i + 0];
+		const float *src_p1 = src[i + 1];
+		const float *src_p2 = src[i + 2];
+		const float *src_p3 = src[i + 3];
 
-		float *dst_p0 = dst_view[i + 0];
-		float *dst_p1 = dst_view[i + 1];
-		float *dst_p2 = dst_view[i + 2];
-		float *dst_p3 = dst_view[i + 3];
+		float *dst_p0 = dst[i + 0];
+		float *dst_p1 = dst[i + 1];
+		float *dst_p2 = dst[i + 2];
+		float *dst_p3 = dst[i + 3];
 
 		int j;
 
-		for (j = 0; j < dst.width; ++j) {
+		for (j = 0; j < dst.width(); ++j) {
 			__m128 accum = _mm_setzero_ps();
 			__m128 cached[4];
 
 			const float *filter_row = &filter_data[j * filter_stride];
 			int left = filter_left[j] - left_base;
 
-			if (left + filter_stride > src.width)
+			if (left + filter_stride > src.width())
 				break;
 
 			for (int k = 0; k < (DoLoop ? filter.width() : 4); k += 4) {
@@ -256,17 +250,14 @@ void resize_tile_fp_h_sse2(const EvaluatedFilter &filter, const ImageTile &src, 
 				_mm_store_ps(&dst_p3[dst_j], cached[3]);
 			}
 		}
-		resize_tile_h_scalar(filter, src, dst, n, i, floor_n(j, 4), i + 4, dst.width, ScalarPolicy_F32{});
+		resize_tile_h_scalar(filter, src, dst, n, i, floor_n(j, 4), i + 4, dst.width(), ScalarPolicy_F32{});
 	}
-	resize_tile_h_scalar(filter, src, dst, n, floor_n(dst.height, 4), 0, dst.height, dst.width, ScalarPolicy_F32{});
+	resize_tile_h_scalar(filter, src, dst, n, floor_n(dst.height(), 4), 0, dst.height(), dst.width(), ScalarPolicy_F32{});
 }
 
-void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n, uint32_t *tmp)
+void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int n, uint32_t *tmp)
 {
 	__m128i INT16_MIN_EPI16 = _mm_set1_epi16(INT16_MIN);
-
-	TileView<const uint16_t> src_view{ src };
-	TileView<uint16_t> dst_view{ dst };
 
 	int filter_stride = filter.stride_i16();
 
@@ -275,23 +266,23 @@ void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile &src,
 
 	int top_base = filter_left[0];
 
-	for (int i = 0; i < dst.height; ++i) {
+	for (int i = 0; i < dst.height(); ++i) {
 		const int16_t *filter_row = &filter_data[i * filter_stride];
 		int top = filter_left[i] - top_base;
-		uint16_t *dst_ptr = dst_view[i];
+		uint16_t *dst_ptr = dst[i];
 
 		for (int k = 0; k < floor_n(filter.width(), 4); k += 4) {
-			const uint16_t *src_ptr0 = src_view[top + k + 0];
-			const uint16_t *src_ptr1 = src_view[top + k + 1];
-			const uint16_t *src_ptr2 = src_view[top + k + 2];
-			const uint16_t *src_ptr3 = src_view[top + k + 3];
+			const uint16_t *src_ptr0 = src[top + k + 0];
+			const uint16_t *src_ptr1 = src[top + k + 1];
+			const uint16_t *src_ptr2 = src[top + k + 2];
+			const uint16_t *src_ptr3 = src[top + k + 3];
 
 			__m128i coeff0 = _mm_set1_epi16(filter_row[k + 0]);
 			__m128i coeff1 = _mm_set1_epi16(filter_row[k + 1]);
 			__m128i coeff2 = _mm_set1_epi16(filter_row[k + 2]);
 			__m128i coeff3 = _mm_set1_epi16(filter_row[k + 3]);
 
-			for (int j = 0; j < floor_n(dst.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(dst.width(), 8); j += 8) {
 				__m128i x0, x1, x2, x3;
 				__m128i packed;
 
@@ -338,15 +329,15 @@ void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile &src,
 			int m = filter.width() % 4;
 			int k = filter.width() - m;
 
-			const uint16_t *src_ptr0 = src_view[top + k + 0];
-			const uint16_t *src_ptr1 = src_view[top + k + 1];
-			const uint16_t *src_ptr2 = src_view[top + k + 2];
+			const uint16_t *src_ptr0 = src[top + k + 0];
+			const uint16_t *src_ptr1 = src[top + k + 1];
+			const uint16_t *src_ptr2 = src[top + k + 2];
 
 			__m128i coeff0 = _mm_set1_epi16(filter_row[k + 0]);
 			__m128i coeff1 = _mm_set1_epi16(filter_row[k + 1]);
 			__m128i coeff2 = _mm_set1_epi16(filter_row[k + 2]);
 
-			for (int j = 0; j < floor_n(dst.width, 8); j += 8) {
+			for (int j = 0; j < floor_n(dst.width(), 8); j += 8) {
 				__m128i x0, x1, x2;
 				__m128i packed;
 
@@ -384,15 +375,12 @@ void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile &src,
 				_mm_store_si128((__m128i *)&dst_ptr[j], packed);
 			}
 		}
-		resize_tile_v_scalar(filter, src, dst, n, i, floor_n(dst.width, 8), i + 1, dst.width, ScalarPolicy_U16{});
+		resize_tile_v_scalar(filter, src, dst, n, i, floor_n(dst.width(), 8), i + 1, dst.width(), ScalarPolicy_U16{});
 	}
 }
 
-void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile &src, const ImageTile &dst, int n)
+void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile<const float> &src, const ImageTile<float> &dst, int n)
 {
-	TileView<const float> src_view{ src };
-	TileView<float> dst_view{ dst };
-
 	int filter_stride = filter.stride();
 
 	const float *filter_data = &filter.data()[n * filter_stride];
@@ -400,23 +388,23 @@ void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile &src, 
 
 	int top_base = filter_left[0];
 
-	for (int i = 0; i < dst.height; ++i) {
+	for (int i = 0; i < dst.height(); ++i) {
 		const float *filter_row = &filter_data[i * filter_stride];
 		int top = filter_left[i] - top_base;
-		float *dst_ptr = dst_view[i];
+		float *dst_ptr = dst[i];
 
 		for (int k = 0; k < floor_n(filter.width(), 4); k += 4) {
-			const float *src_ptr0 = src_view[top + k + 0];
-			const float *src_ptr1 = src_view[top + k + 1];
-			const float *src_ptr2 = src_view[top + k + 2];
-			const float *src_ptr3 = src_view[top + k + 3];
+			const float *src_ptr0 = src[top + k + 0];
+			const float *src_ptr1 = src[top + k + 1];
+			const float *src_ptr2 = src[top + k + 2];
+			const float *src_ptr3 = src[top + k + 3];
 
 			__m128 coeff0 = _mm_set_ps1(filter_row[k + 0]);
 			__m128 coeff1 = _mm_set_ps1(filter_row[k + 1]);
 			__m128 coeff2 = _mm_set_ps1(filter_row[k + 2]);
 			__m128 coeff3 = _mm_set_ps1(filter_row[k + 3]);
 
-			for (int j = 0; j < floor_n(dst.width, 4); j += 4) {
+			for (int j = 0; j < floor_n(dst.width(), 4); j += 4) {
 				__m128 x0, x1, x2, x3;
 				__m128 accum0, accum1;
 
@@ -446,15 +434,15 @@ void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile &src, 
 			int m = filter.width() % 4;
 			int k = filter.width() - m;
 
-			const float *src_ptr0 = src_view[top + k + 0];
-			const float *src_ptr1 = src_view[top + k + 1];
-			const float *src_ptr2 = src_view[top + k + 2];
+			const float *src_ptr0 = src[top + k + 0];
+			const float *src_ptr1 = src[top + k + 1];
+			const float *src_ptr2 = src[top + k + 2];
 
 			__m128 coeff0 = _mm_set_ps1(filter_row[k + 0]);
 			__m128 coeff1 = _mm_set_ps1(filter_row[k + 1]);
 			__m128 coeff2 = _mm_set_ps1(filter_row[k + 2]);
 
-			for (int j = 0; j < floor_n(dst.width, 4); j += 4) {
+			for (int j = 0; j < floor_n(dst.width(), 4); j += 4) {
 				__m128 x0, x1, x2;
 
 				__m128 accum0 = _mm_setzero_ps();
@@ -481,7 +469,7 @@ void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile &src, 
 				_mm_store_ps(&dst_ptr[j], accum0);
 			}
 		}
-		resize_tile_v_scalar(filter, src, dst, n, i, floor_n(dst.width, 4), i + 1, dst.width, ScalarPolicy_F32{});
+		resize_tile_v_scalar(filter, src, dst, n, i, floor_n(dst.width(), 4), i + 1, dst.width(), ScalarPolicy_F32{});
 	}
 }
 
@@ -490,7 +478,7 @@ public:
 	ResizeImplH_SSE2(const EvaluatedFilter &filter) : ResizeImpl(filter, true)
 	{}
 
-	void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		if (m_filter.width() > 8)
 			resize_tile_u16_h_sse2<true>(m_filter, src, dst, j);
@@ -498,12 +486,12 @@ public:
 			resize_tile_u16_h_sse2<false>(m_filter, src, dst, j);
 	}
 
-	void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in SSE2 impl" };
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
 	{
 		if (m_filter.width() > 4)
 			resize_tile_fp_h_sse2<true>(m_filter, src, dst, j);
@@ -517,17 +505,17 @@ public:
 	ResizeImplV_SSE2(const EvaluatedFilter &filter) : ResizeImpl(filter, false)
 	{}
 
-	void process_u16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		resize_tile_u16_v_sse2(m_filter, src, dst, i, (uint32_t *)tmp);
 	}
 
-	void process_f16(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in SSE2 impl" };
 	}
 
-	void process_f32(const ImageTile &src, const ImageTile &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
 	{
 		resize_tile_fp_v_sse2(m_filter, src, dst, i);
 	}

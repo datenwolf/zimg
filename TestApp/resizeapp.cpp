@@ -133,24 +133,42 @@ void execute(const resize::Resize *resize_h, const resize::Resize *resize_v, con
 
 	measure_time(times, [&]()
 	{
+		PlaneDescriptor desc{ type };
+
 		for (int p = 0; p < planes; ++p) {
-			ImageTile src_tile{ src.data(p), src.stride() * pxsize, src.width(), src.height(), default_pixel_format(type) };
-			ImageTile dst_tile{ dst.data(p), dst.stride() * pxsize, dst.width(), dst.height(), default_pixel_format(type) };
+			ImageTile<const void> src_tile{ src.data(p), &desc, src.stride() * pxsize, src.width(), src.height() };
+			ImageTile<void> dst_tile{ dst.data(p), &desc, dst.stride() * pxsize, dst.width(), dst.height() };
+
+			int top, left, bottom, right;
 
 			if (skip_h && skip_v) {
 				copy_image_tile(src_tile, dst_tile);
 			} else if (skip_h && !skip_v) {
+				resize_v->dependent_rect(0, 0, dst.width(), dst.height(), &top, &left, &bottom, &right);
+				src_tile = src_tile.sub_tile(top, left);
 				resize_v->process(src_tile, dst_tile, 0, 0, tmp_buffer.data());
 			} else if (skip_v && !skip_h) {
+				resize_h->dependent_rect(0, 0, dst.width(), dst.height(), &top, &left, &bottom, &right);
+				src_tile = src_tile.sub_tile(top, left);
 				resize_h->process(src_tile, dst_tile, 0, 0, tmp_buffer.data());
 			} else {
-				ImageTile tmp_tile{ tmp_frame.data(), tmp_stride * pxsize, tmp_width, tmp_height, default_pixel_format(type) };
+				ImageTile<void> tmp_tile{ tmp_frame.data(), &desc, tmp_stride * pxsize, tmp_width, tmp_height };
 
 				if (hfirst) {
+					resize_h->dependent_rect(0, 0, tmp_width, tmp_height, &top, &left, &bottom, &right);
+					src_tile = src_tile.sub_tile(top, left);
 					resize_h->process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
+
+					resize_v->dependent_rect(0, 0, dst.width(), dst.height(), &top, &left, &bottom, &right);
+					src_tile = src_tile.sub_tile(top, left);
 					resize_v->process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
 				} else {
+					resize_v->dependent_rect(0, 0, tmp_width, tmp_height, &top, &left, &bottom, &right);
+					src_tile = src_tile.sub_tile(top, left);
 					resize_v->process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
+
+					resize_h->dependent_rect(0, 0, dst.width(), dst.height(), &top, &left, &bottom, &right);
+					src_tile = src_tile.sub_tile(top, left);
 					resize_h->process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
 				}
 			}

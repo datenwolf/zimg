@@ -79,16 +79,16 @@ void convert_frame(const Frame &in, Frame &out, zimg::PixelType pxl_in, zimg::Pi
 		bool plane_fullrange = fullrange || p == 3; // Always treat alpha as fullrange.
 		bool plane_chroma = yuv && (p == 1 || p == 2); // Chroma planes.
 
-		PixelFormat src_format = default_pixel_format(pxl_in);
-		PixelFormat dst_format = default_pixel_format(pxl_out);
+		PlaneDescriptor src_desc{ pxl_in, width, height };
+		PlaneDescriptor dst_desc{ pxl_out, width, height };
 
-		src_format.fullrange = plane_fullrange;
-		src_format.chroma = plane_chroma;
-		dst_format.fullrange = plane_fullrange;
-		dst_format.chroma = plane_chroma;
+		src_desc.format.fullrange = plane_fullrange;
+		src_desc.format.chroma = plane_chroma;
+		dst_desc.format.fullrange = plane_fullrange;
+		dst_desc.format.chroma = plane_chroma;
 
-		ImageTile src_tile{ (void *)in.data(p), src_byte_stride, width, height, src_format };
-		ImageTile dst_tile{ out.data(p), dst_byte_stride, width, height, dst_format };
+		ImageTile<const void> src_tile{ in.data(p), &src_desc, src_byte_stride, width, height };
+		ImageTile<void> dst_tile{ out.data(p), &dst_desc, dst_byte_stride, width, height };
 
 		convert->process_tile(src_tile, dst_tile, nullptr);
 	}

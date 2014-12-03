@@ -35,14 +35,14 @@ size_t Unresize::tmp_size(PixelType type) const
 	return size;
 }
 
-void Unresize::process(const ImageTile &src, const ImageTile &dst, void *tmp) const
+void Unresize::process(const ImageTile<const void> &src, const ImageTile<void> &dst, void *tmp) const
 {
-	switch (src.format.type) {
+	switch (src.descriptor()->format.type) {
 	case PixelType::HALF:
-		m_impl->process_f16(src, dst, tmp);
+		m_impl->process_f16(tile_cast<const uint16_t>(src), tile_cast<uint16_t>(dst), tmp);
 		break;
 	case PixelType::FLOAT:
-		m_impl->process_f32(src, dst, tmp);
+		m_impl->process_f32(tile_cast<const float>(src), tile_cast<float>(dst), tmp);
 		break;
 	default:
 		throw ZimgUnsupportedError{ "only HALF and FLOAT supported for unresize" };

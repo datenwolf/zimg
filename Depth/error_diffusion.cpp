@@ -13,22 +13,19 @@ namespace {;
 
 class ErrorDiffusionC : public DitherConvert {
 	template <class T, class U, class ToFloat, class FromFloat>
-	void dither(const ImageTile &src, const ImageTile &dst, float *tmp, ToFloat to_float, FromFloat from_float) const
+	void dither(const ImageTile<const T> &src, const ImageTile<U> &dst, float *tmp, ToFloat to_float, FromFloat from_float) const
 	{		
-		TileView<const T> src_view{ src };
-		TileView<U> dst_view{ dst };
-
-		float quant_scale = (float)((1 << dst.format.depth) - 1);
+		float quant_scale = (float)((1 << dst.descriptor()->format.depth) - 1);
 		float dequant_scale = 1.0f / quant_scale;
 
 		float *prev_line = tmp + 1;
-		float *curr_line = prev_line + src.width + 2;
+		float *curr_line = prev_line + src.width() + 2;
 
-		std::fill_n(tmp, (src.width + 2) * 2, 0.0f);
+		std::fill_n(tmp, (src.descriptor()->width + 2) * 2, 0.0f);
 
-		for (int i = 0; i < src.height; ++i) {
-			for (int j = 0; j < src.width; ++j) {
-				float x = to_float(src_view[i][j]);
+		for (int i = 0; i < src.descriptor()->height; ++i) {
+			for (int j = 0; j < src.descriptor()->width; ++j) {
+				float x = to_float(src[i][j]);
 				float err = 0;
 
 				err += curr_line[j - 1] * (7.0f / 16.0f);
@@ -40,7 +37,7 @@ class ErrorDiffusionC : public DitherConvert {
 
 				float q = (float)(int)(x * quant_scale + (x < 0 ? -0.5 : 0.5)) * dequant_scale;
 
-				dst_view[i][j] = from_float(x);
+				dst[i][j] = from_float(x);
 				curr_line[j] = x - q;
 			}
 
@@ -48,60 +45,44 @@ class ErrorDiffusionC : public DitherConvert {
 		}
 	}
 public:
-	void byte_to_byte(const ImageTile &src, const ImageTile &dst, float *tmp) const override
+	void byte_to_byte(const ImageTile<const uint8_t> &src, const ImageTile<uint8_t> &dst, float *tmp) const override
 	{
-		dither<uint8_t, uint8_t>(src, dst, tmp,
-		                         make_integer_to_float<uint8_t>(src.format),
-		                         make_float_to_integer<uint8_t>(dst.format));
+		dither(src, dst, tmp, make_integer_to_float<uint8_t>(src.descriptor()->format), make_float_to_integer<uint8_t>(dst.descriptor()->format));
 	}
 
-	void byte_to_word(const ImageTile &src, const ImageTile &dst, float *tmp) const override
+	void byte_to_word(const ImageTile<const uint8_t> &src, const ImageTile<uint16_t> &dst, float *tmp) const override
 	{
-		dither<uint8_t, uint16_t>(src, dst, tmp,
-		                          make_integer_to_float<uint8_t>(src.format),
-		                          make_float_to_integer<uint16_t>(dst.format));
+		dither(src, dst, tmp, make_integer_to_float<uint8_t>(src.descriptor()->format), make_float_to_integer<uint16_t>(dst.descriptor()->format));
 	}
 
-	void word_to_byte(const ImageTile &src, const ImageTile &dst, float *tmp) const override
+	void word_to_byte(const ImageTile<const uint16_t> &src, const ImageTile<uint8_t> &dst, float *tmp) const override
 	{
-		dither<uint16_t, uint8_t>(src, dst, tmp,
-		                          make_integer_to_float<uint16_t>(src.format),
-		                          make_float_to_integer<uint8_t>(dst.format));
+		dither(src, dst, tmp, make_integer_to_float<uint16_t>(src.descriptor()->format), make_float_to_integer<uint8_t>(dst.descriptor()->format));
 	}
 
-	void word_to_word(const ImageTile &src, const ImageTile &dst, float *tmp) const override
+	void word_to_word(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, float *tmp) const override
 	{
-		dither<uint16_t, uint16_t>(src, dst, tmp,
-		                           make_integer_to_float<uint16_t>(src.format),
-		                           make_float_to_integer<uint16_t>(dst.format));
+		dither(src, dst, tmp, make_integer_to_float<uint16_t>(src.descriptor()->format), make_float_to_integer<uint16_t>(dst.descriptor()->format));
 	}
 
-	void half_to_byte(const ImageTile &src, const ImageTile &dst, float *tmp) const override
+	void half_to_byte(const ImageTile<const uint16_t> &src, const ImageTile<uint8_t> &dst, float *tmp) const override
 	{
-		dither<uint16_t, uint8_t>(src, dst, tmp,
-		                          depth::half_to_float,
-		                          make_float_to_integer<uint8_t>(dst.format));
+		dither(src, dst, tmp, depth::half_to_float, make_float_to_integer<uint8_t>(dst.descriptor()->format));
 	}
 
-	void half_to_word(const ImageTile &src, const ImageTile &dst, float *tmp) const override
+	void half_to_word(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, float *tmp) const override
 	{
-		dither<uint16_t, uint16_t>(src, dst, tmp,
-		                           depth::half_to_float,
-		                           make_float_to_integer<uint16_t>(dst.format));
+		dither(src, dst, tmp, depth::half_to_float, make_float_to_integer<uint16_t>(dst.descriptor()->format));
 	}
 
-	void float_to_byte(const ImageTile &src, const ImageTile &dst, float *tmp) const override
+	void float_to_byte(const ImageTile<const float> &src, const ImageTile<uint8_t> &dst, float *tmp) const override
 	{
-		dither<float, uint8_t>(src, dst, tmp,
-		                       identity<float>,
-		                       make_float_to_integer<uint8_t>(dst.format));
+		dither(src, dst, tmp, identity<float>, make_float_to_integer<uint8_t>(dst.descriptor()->format));
 	}
 
-	void float_to_word(const ImageTile &src, const ImageTile &dst, float *tmp) const override
+	void float_to_word(const ImageTile<const float> &src, const ImageTile<uint16_t> &dst, float *tmp) const override
 	{
-		dither<float, uint16_t>(src, dst, tmp,
-		                        identity<float>,
-		                        make_float_to_integer<uint16_t>(dst.format));
+		dither(src, dst, tmp, identity<float>, make_float_to_integer<uint16_t>(dst.descriptor()->format));
 	}
 };
 

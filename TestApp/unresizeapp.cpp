@@ -92,10 +92,13 @@ void execute(const unresize::Unresize *unresize_h, const unresize::Unresize *unr
 
 	measure_time(times, [&]()
 	{
+		PlaneDescriptor src_desc{ type, src.width(), src.height() };
+		PlaneDescriptor dst_desc{ type, dst.width(), dst.height() };
+		PlaneDescriptor tmp_desc{ type, tmp_width, tmp_height };
+
 		for (int p = 0; p < src.planes(); ++p) {
-			ImageTile src_tile{ src.data(p), src.stride() * pxsize, src.width(), src.height(), default_pixel_format(type) };
-			ImageTile dst_tile{ dst.data(p), dst.stride() * pxsize, dst.width(), dst.height(), default_pixel_format(type) };
-			ImageTile tmp_tile{ tmp_frame.data(), tmp_stride * pxsize, tmp_width, tmp_height, default_pixel_format(type) };
+			ImageTile<const void> src_tile{ src.data(p), &src_desc, src.stride() * pxsize };
+			ImageTile<void> dst_tile{ dst.data(p), &dst_desc, dst.stride() * pxsize };
 
 			if (skip_h && skip_v) {
 				copy_image_tile(src_tile, dst_tile);
@@ -104,7 +107,7 @@ void execute(const unresize::Unresize *unresize_h, const unresize::Unresize *unr
 			} else if (skip_v && !skip_h) {
 				unresize_h->process(src_tile, dst_tile, tmp_buffer.data());
 			} else {
-				ImageTile tmp_tile{ tmp_frame.data(), tmp_stride * pxsize, tmp_width, tmp_height, default_pixel_format(type) };
+				ImageTile<void> tmp_tile{ tmp_frame.data(), &tmp_desc, tmp_stride * pxsize };
 
 				if (hfirst) {
 					unresize_h->process(src_tile, tmp_tile, tmp_buffer.data());

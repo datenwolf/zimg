@@ -11,7 +11,8 @@ namespace zimg {;
 enum class CPUClass;
 enum class PixelType;
 
-struct ImageTile;
+template <class T>
+class ImageTile;
 
 namespace unresize {;
 
@@ -142,7 +143,7 @@ public:
 	 * @param tmp temporary buffer (@see Unresize::tmp_size)
 	 * @throws ZimgUnsupportedError if pixel type not supported
 	 */
-	void process(const ImageTile &src, const ImageTile &dst, void *tmp) const;
+	void process(const ImageTile<const void> &src, const ImageTile<void> &dst, void *tmp) const;
 };
 
 /**

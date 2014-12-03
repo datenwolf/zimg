@@ -105,11 +105,11 @@ void execute(const depth::Depth &depth, const Frame &in, Frame &out, int times,
 		for (int p = 0; p < 3; ++p) {
 			bool chroma = yuv && (p == 1 || p == 2);
 
-			PixelFormat src_format{ pxl_in, bits_in, fullrange_in, chroma };
-			PixelFormat dst_format{ pxl_out, bits_out, fullrange_out, chroma };
+			PlaneDescriptor src_desc{ { pxl_in, bits_in, fullrange_in, chroma }, width, height };
+			PlaneDescriptor dst_desc{ { pxl_out, bits_out, fullrange_out, chroma }, width, height };
 
-			ImageTile src_tile{ (void *)in.data(p), src_byte_stride, width, height, src_format };
-			ImageTile dst_tile{ out.data(p), dst_byte_stride, width, height, dst_format };
+			ImageTile<const void> src_tile{ in.data(p), &src_desc, src_byte_stride, width, height };
+			ImageTile<void> dst_tile{ out.data(p), &dst_desc, dst_byte_stride, width, height };
 
 			depth.process_tile(src_tile, dst_tile, tmp.data());
 		}
@@ -130,11 +130,11 @@ void export_for_bmp(const Frame &in, Frame &out, PixelType type, int bits, bool 
 	for (int p = 0; p < 3; ++p) {
 		bool chroma = yuv && (p == 1 || p == 2);
 
-		PixelFormat src_format{ type, bits, fullrange, chroma };
-		PixelFormat dst_format{ PixelType::BYTE, 8, fullrange, chroma };
+		PlaneDescriptor src_desc{ { type, bits, fullrange, chroma }, width, height };
+		PlaneDescriptor dst_desc{ { PixelType::BYTE, 8, fullrange, chroma }, width, height };
 
-		ImageTile src_tile{ (void *)in.data(p), src_byte_stride, width, height, src_format };
-		ImageTile dst_tile{ out.data(p), dst_byte_stride, width, height, dst_format };
+		ImageTile<const void> src_tile{ in.data(p), &src_desc, src_byte_stride, width, height };
+		ImageTile<void> dst_tile{ out.data(p), &dst_desc, dst_byte_stride, width, height };
 
 		depth.process_tile(src_tile, dst_tile, tmp.data());
 	}

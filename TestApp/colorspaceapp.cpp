@@ -149,37 +149,39 @@ void execute(const colorspace::ColorspaceConversion &conv, const Frame &in, Fram
 	int in_byte_stride = in_conv.stride() * in_conv.pxsize();
 	int out_byte_stride = out_conv.stride() * out_conv.pxsize();
 
-	auto tmp = allocate_buffer(conv.tmp_size(64, 64), PixelType::FLOAT);
+	auto tmp = allocate_buffer(conv.tmp_size(TILE_WIDTH, TILE_HEIGHT), PixelType::FLOAT);
 
 	convert_frame(in, in_conv, filetype, type, fullrange_in, yuv_in);
 
 	measure_time(times, [&]()
 	{
-		ImageTile in_tiles[3] = { 0 };
-		ImageTile out_tiles[3] = { 0 };
+		PlaneDescriptor desc{ type };
+
+		ImageTile<const void> in_frame_tiles[3];
+		ImageTile<void> out_frame_tiles[3];
+
+		ImageTile<const void> in_tiles[3];
+		ImageTile<void> out_tiles[3];
 
 		for (int p = 0; p < 3; ++p) {
-			in_tiles[p].byte_stride = in_byte_stride;
-			out_tiles[p].byte_stride = out_byte_stride;
-
-			in_tiles[p].format = default_pixel_format(type);
-			out_tiles[p].format = default_pixel_format(type);
+			in_tiles[p] = ImageTile<const void>{ in_conv.data(p), &desc, in_conv.stride() * pxsize, width, height };
+			out_tiles[p] = ImageTile<void>{ out_conv.data(p), &desc, out_conv.stride() * pxsize, width, height };
 		}
 
-		for (int i = 0; i < height; i += 64) {
-			for (int j = 0; j < width; j += 64) {
-				int tile_h = std::min(height - i, 64);
-				int tile_w = std::min(width - j, 64);
+		for (int i = 0; i < height; i += TILE_HEIGHT) {
+			for (int j = 0; j < width; j += TILE_WIDTH) {
+				int tile_h = std::min(height - i, TILE_HEIGHT);
+				int tile_w = std::min(width - j, TILE_WIDTH);
 
 				for (int p = 0; p < 3; ++p) {
-					in_tiles[p].ptr = (char *)in_conv.data(p) + i * in_byte_stride + j * pxsize;
-					out_tiles[p].ptr = (char *)out_conv.data(p) + i * out_byte_stride + j * pxsize;
+					in_tiles[p] = in_frame_tiles[p].sub_tile(i, j);
+					out_tiles[p] = out_frame_tiles[p].sub_tile(i, j);
 
-					in_tiles[p].width = tile_w;
-					in_tiles[p].height = tile_h;
+					in_tiles[p].width() = tile_w;
+					in_tiles[p].height() = tile_h;
 
-					out_tiles[p].width = tile_w;
-					out_tiles[p].height = tile_h;
+					out_tiles[p].width() = tile_w;
+					out_tiles[p].height() = tile_h;
 				}
 
 				conv.process_tile(in_tiles, out_tiles, tmp.data());
