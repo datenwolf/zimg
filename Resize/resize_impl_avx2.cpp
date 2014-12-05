@@ -655,7 +655,13 @@ void resize_tile_fp_v_avx2(const EvaluatedFilter &filter, const ImageTile<const 
 class ResizeImplH_AVX2 final : public ResizeImpl {
 public:
 	ResizeImplH_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter, true)
-	{}
+	{
+	}
+
+	bool pixel_supported(PixelType type) const override
+	{
+		return type == PixelType::WORD || type == PixelType::HALF || type == PixelType::FLOAT;
+	}
 
 	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
@@ -685,7 +691,13 @@ public:
 class ResizeImplV_AVX2 final : public ResizeImpl {
 public:
 	ResizeImplV_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter, false)
-	{}
+	{
+	}
+
+	bool pixel_supported(PixelType type) const override
+	{
+		return type == PixelType::WORD || type == PixelType::HALF || type == PixelType::FLOAT;
+	}
 
 	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{

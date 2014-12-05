@@ -11,6 +11,7 @@
 namespace zimg {;
 
 enum class CPUClass;
+enum class PixelType;
 
 template <class T>
 class ImageTile;
@@ -54,6 +55,14 @@ public:
 	 * @param src_right pointer to receive output right column index
 	 */
 	void dependent_rect(int dst_top, int dst_left, int dst_bottom, int dst_right, int *src_top, int *src_left, int *src_bottom, int *src_right) const;
+
+	/**
+	 * Check if conversion supports the given pixel type.
+	 *
+	 * @param type pixel type
+	 * @return true if supported, else false
+	 */
+	virtual bool pixel_supported(PixelType type) const = 0;
 
 	/**
 	 * Execute filter pass on an unsigned 16-bit image.

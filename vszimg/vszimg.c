@@ -1,11 +1,14 @@
+#define ZIMG_PLANE_HELPER
+
 #include <math.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include "zimg.h"
 #include "VapourSynth.h"
 #include "VSHelper.h"
 
-#if ZIMG_API_VERSION < 1
+#if ZIMG_API_VERSION < 2
   #error zAPI v1 or greater required
 #endif
 
@@ -131,7 +134,7 @@ static const VSFrameRef * VS_CC vs_colorspace_get_frame(int n, int activationRea
 			dst_stride[p] = vsapi->getStride(dst_frame, p);
 		}
 
-		tmp_size = zimg_colorspace_tmp_size(data->colorspace_ctx, width);
+		tmp_size = _zimg_colorspace_plane_tmp_size(data->colorspace_ctx, pixel_type);
 		VS_ALIGNED_MALLOC(&tmp, tmp_size, 32);
 		if (!tmp) {
 			strcpy(fail_str, "error allocating temporary buffer");
@@ -139,11 +142,8 @@ static const VSFrameRef * VS_CC vs_colorspace_get_frame(int n, int activationRea
 			goto fail;
 		}
 
-		err = zimg_colorspace_process(data->colorspace_ctx, src_plane, dst_plane, tmp, width, height, src_stride, dst_stride, pixel_type);
-		if (err) {
-			zimg_get_last_error(fail_str, sizeof(fail_str));
-			goto fail;
-		}
+		_zimg_colorspace_plane_process(data->colorspace_ctx, src_plane, dst_plane, tmp, width, height, src_stride, dst_stride, pixel_type);
+
 		ret = dst_frame;
 		dst_frame = 0;
 	fail:
@@ -225,6 +225,10 @@ static void VS_CC vs_colorspace_create(const VSMap *in, VSMap *out, void *userDa
 		zimg_get_last_error(fail_str, sizeof(fail_str));
 		goto fail;
 	}
+	if (!zimg_colorspace_pixel_supported(colorspace_ctx, translate_pixel(vi.format))) {
+		strcpy(fail_str, "VSFormat not supported");
+		goto fail;
+	}
 
 	data = malloc(sizeof(vs_colorspace_data));
 	if (!data) {
@@ -285,7 +289,7 @@ static const VSFrameRef * VS_CC vs_depth_get_frame(int n, int activationReason, 
 		int yuv = src_format->colorFamily == cmYUV || src_format->colorFamily == cmYCoCg;
 
 		void *tmp = 0;
-		size_t tmp_size = zimg_depth_tmp_size(data->depth_ctx, vsapi->getFrameWidth(src_frame, 0));
+		size_t tmp_size = _zimg_depth_plane_tmp_size(data->depth_ctx, vsapi->getFrameWidth(src_frame, 0), src_pixel, dst_pixel);
 
 		VS_ALIGNED_MALLOC(&tmp, tmp_size, 32);
 		if (!tmp) {
@@ -295,21 +299,21 @@ static const VSFrameRef * VS_CC vs_depth_get_frame(int n, int activationReason, 
 		}
 
 		for (p = 0; p < data->vi.format->numPlanes; ++p) {
-			err = zimg_depth_process(data->depth_ctx,
-			                         vsapi->getReadPtr(src_frame, p),
-			                         vsapi->getWritePtr(dst_frame, p),
-			                         tmp,
-			                         vsapi->getFrameWidth(src_frame, p),
-			                         vsapi->getFrameHeight(src_frame, p),
-			                         vsapi->getStride(src_frame, p),
-			                         vsapi->getStride(dst_frame, p),
-			                         src_pixel,
-			                         dst_pixel,
-			                         src_format->bitsPerSample,
-			                         dst_format->bitsPerSample,
-			                         data->tv_in,
-			                         data->tv_out,
-			                         p > 0 && yuv);
+			_zimg_depth_plane_process(data->depth_ctx,
+			                          vsapi->getReadPtr(src_frame, p),
+			                          vsapi->getWritePtr(dst_frame, p),
+			                          tmp,
+			                          vsapi->getFrameWidth(src_frame, p),
+			                          vsapi->getFrameHeight(src_frame, p),
+			                          vsapi->getStride(src_frame, p),
+			                          vsapi->getStride(dst_frame, p),
+			                          src_pixel,
+			                          dst_pixel,
+			                          src_format->bitsPerSample,
+			                          dst_format->bitsPerSample,
+			                          data->tv_in,
+			                          data->tv_out,
+			                          p > 0 && yuv);
 			if (err) {
 				zimg_get_last_error(fail_str, sizeof(fail_str));
 				goto fail;
@@ -439,8 +443,17 @@ fail:
 
 
 typedef struct vs_resize_data {
-	zimg_resize_context *resize_ctx_y;
-	zimg_resize_context *resize_ctx_uv;
+	zimg_resize_context *resize_ctx_y_1;
+	zimg_resize_context *resize_ctx_y_2;
+	zimg_resize_context *resize_ctx_uv_1;
+	zimg_resize_context *resize_ctx_uv_2;
+
+	int use_y_as_uv;
+	int tmp_width_y;
+	int tmp_width_uv;
+	int tmp_height_y;
+	int tmp_height_uv;
+
 	VSNodeRef *node;
 	VSVideoInfo vi;
 } vs_resize_data;
@@ -471,9 +484,36 @@ static const VSFrameRef * VS_CC vs_resize_get_frame(int n, int activationReason,
 		int pixel_type = translate_pixel(format);
 
 		void *tmp = 0;
-		size_t tmp_size = zimg_resize_tmp_size(data->resize_ctx_y, pixel_type);
-		size_t tmp_size_uv = data->resize_ctx_uv ? zimg_resize_tmp_size(data->resize_ctx_uv, pixel_type) : 0;
-		tmp_size = tmp_size_uv > tmp_size ? tmp_size_uv : tmp_size;
+		size_t tmp_size = 0;
+
+		for (p = 0; p < format->numPlanes; ++p) {
+			int uv = p == 1 || p == 2;
+
+			zimg_resize_context *resize_1 = (uv && !data->use_y_as_uv) ? data->resize_ctx_uv_1 : data->resize_ctx_y_1;
+			zimg_resize_context *resize_2 = (uv && !data->use_y_as_uv) ? data->resize_ctx_uv_2 : data->resize_ctx_y_2;
+
+			int src_width = vsapi->getFrameWidth(src_frame, p);
+			int src_height = vsapi->getFrameHeight(src_frame, p);
+
+			int dst_width = data->vi.width >> (uv ? data->vi.format->subSamplingW : 0);
+			int dst_height = data->vi.height >> (uv ? data->vi.format->subSamplingH : 0);
+
+			size_t local_sz = 0;
+			
+			if (resize_1 && resize_2) {
+				int tmp_width = (uv && !data->use_y_as_uv) ? data->tmp_width_uv : data->tmp_width_y;
+				int tmp_height = (uv && !data->use_y_as_uv) ? data->tmp_height_uv : data->tmp_height_y;
+
+				size_t sz1 = _zimg_resize_plane_tmp_size(resize_1, src_width, src_height, tmp_width, tmp_height, pixel_type);
+				size_t sz2 = _zimg_resize_plane_tmp_size(resize_2, tmp_width, tmp_height, dst_width, dst_height, pixel_type);
+
+				local_sz = sz1 > sz2 ? sz1 : sz2;
+			} else if (resize_1) {
+				local_sz = _zimg_resize_plane_tmp_size(resize_1, src_width, src_height, dst_width, dst_height, pixel_type);
+			}
+
+			tmp_size = tmp_size > local_sz ? tmp_size : local_sz;
+		}
 
 		VS_ALIGNED_MALLOC(&tmp, tmp_size, 32);
 		if (!tmp) {
@@ -483,22 +523,39 @@ static const VSFrameRef * VS_CC vs_resize_get_frame(int n, int activationReason,
 		}
 
 		for (p = 0; p < format->numPlanes; ++p) {
-			zimg_resize_context *resize_ctx = ((p == 1 || p == 2) && data->resize_ctx_uv) ? data->resize_ctx_uv : data->resize_ctx_y;
+			int uv = p == 1 || p == 2;
 
-			err = zimg_resize_process(resize_ctx,
-			                          vsapi->getReadPtr(src_frame, p),
-			                          vsapi->getWritePtr(dst_frame, p),
-			                          tmp,
-			                          vsapi->getFrameWidth(src_frame, p),
-			                          vsapi->getFrameHeight(src_frame, p),
-			                          data->vi.width,
-			                          data->vi.height,
-			                          vsapi->getStride(src_frame, p),
-			                          vsapi->getStride(dst_frame, p),
-			                          pixel_type);
-			if (err) {
-				zimg_get_last_error(fail_str, sizeof(fail_str));
-				goto fail;
+			zimg_resize_context *resize_1 = (uv && !data->use_y_as_uv) ? data->resize_ctx_uv_1 : data->resize_ctx_y_1;
+			zimg_resize_context *resize_2 = (uv && !data->use_y_as_uv) ? data->resize_ctx_uv_2 : data->resize_ctx_y_2;
+
+			int src_width = vsapi->getFrameWidth(src_frame, p);
+			int src_height = vsapi->getFrameHeight(src_frame, p);
+			int src_stride = vsapi->getStride(src_frame, p);
+
+			int dst_width = data->vi.width >> (uv ? data->vi.format->subSamplingW : 0);
+			int dst_height = data->vi.height >> (uv ? data->vi.format->subSamplingH : 0);
+			int dst_stride = vsapi->getStride(dst_frame, p);
+
+			const void *src_p = vsapi->getReadPtr(src_frame, p);
+			void *dst_p = vsapi->getWritePtr(dst_frame, p);
+
+			if (resize_1 && resize_2) {
+				int tmp_width = (uv && !data->use_y_as_uv) ? data->tmp_width_uv : data->tmp_width_y;
+				int tmp_height = (uv && !data->use_y_as_uv) ? data->tmp_height_uv : data->tmp_height_y;
+
+				const VSFormat *tmp_format = vsapi->registerFormat(cmGray, data->vi.format->sampleType, data->vi.format->bitsPerSample, 0, 0, core);
+				VSFrameRef *tmp_frame = vsapi->newVideoFrame(tmp_format, tmp_width, tmp_height, 0, core);
+				void *tmp_p = vsapi->getWritePtr(tmp_frame, 0);
+				int tmp_stride = vsapi->getStride(tmp_frame, 0);
+
+				_zimg_resize_plane_process(resize_1, src_p, tmp_p, tmp, src_width, src_height, tmp_width, tmp_height, src_stride, tmp_stride, pixel_type);
+				_zimg_resize_plane_process(resize_2, tmp_p, dst_p, tmp, tmp_width, tmp_height, dst_width, dst_height, tmp_stride, dst_stride, pixel_type);
+
+				vsapi->freeFrame(tmp_frame);
+			} else if (resize_1) {
+				_zimg_resize_plane_process(resize_1, src_p, dst_p, tmp, src_width, src_height, dst_width, dst_height, src_stride, dst_stride, pixel_type);
+			} else {
+				vs_bitblt(dst_p, dst_stride, src_p, src_stride, dst_width * data->vi.format->bytesPerSample, dst_height);
 			}
 		}
 		ret = dst_frame;
@@ -518,16 +575,20 @@ static void VS_CC vs_resize_free(void *instanceData, VSCore *core, const VSAPI *
 {
 	vs_resize_data *data = instanceData;
 	vsapi->freeNode(data->node);
-	zimg_resize_delete(data->resize_ctx_y);
-	zimg_resize_delete(data->resize_ctx_uv);
+	zimg_resize_delete(data->resize_ctx_y_1);
+	zimg_resize_delete(data->resize_ctx_y_2);
+	zimg_resize_delete(data->resize_ctx_uv_1);
+	zimg_resize_delete(data->resize_ctx_uv_2);
 	free(data);
 }
 
 static void VS_CC vs_resize_create(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi)
 {
 	vs_resize_data *data = 0;
-	zimg_resize_context *resize_ctx_y = 0;
-	zimg_resize_context *resize_ctx_uv = 0;
+	zimg_resize_context *resize_ctx_y_h = 0;
+	zimg_resize_context *resize_ctx_y_v = 0;
+	zimg_resize_context *resize_ctx_uv_h = 0;
+	zimg_resize_context *resize_ctx_uv_v = 0;
 	char fail_str[1024] = { 0 };
 	int err;
 
@@ -555,6 +616,15 @@ static void VS_CC vs_resize_create(const VSMap *in, VSMap *out, void *userData, 
 
 	int subsample_w;
 	int subsample_h;
+
+	int skip_h_y;
+	int skip_h_uv;
+	int skip_v_y;
+	int skip_v_uv;
+
+	int hfirst_y;
+	int hfirst_uv;
+	int use_y_as_uv;
 
 	const char *chroma_loc_in;
 	const char *chroma_loc_out;
@@ -645,12 +715,33 @@ static void VS_CC vs_resize_create(const VSMap *in, VSMap *out, void *userData, 
 	out_vi.numFrames = node_vi->numFrames;
 	out_vi.flags = 0;
 
-	resize_ctx_y = zimg_resize_create(translate_filter(filter), node_vi->width, node_vi->height,
-	                                  width, height, shift_w, shift_h, subwidth, subheight, filter_param_a, filter_param_b);
-	if (!resize_ctx_y) {
-		zimg_get_last_error(fail_str, sizeof(fail_str));
-		goto fail;
+	skip_h_y = node_vi->width == width && shift_w == 0.0 && subwidth == width;
+	skip_v_y = node_vi->height == height && shift_h == 0.0 && subheight == height;
+
+	if (!skip_h_y) {
+		resize_ctx_y_h = zimg_resize_create(translate_filter(filter), 1, node_vi->width, width, shift_w, subwidth, filter_param_a, filter_param_b);
+		if (!resize_ctx_y_h) {
+			zimg_get_last_error(fail_str, sizeof(fail_str));
+			goto fail;
+		}
+		if (!zimg_resize_pixel_supported(resize_ctx_y_h, translate_pixel(out_vi.format))) {
+			strcpy(fail_str, "VSFormat not suported");
+			goto fail;
+		}
 	}
+	if (!skip_v_y) {
+		resize_ctx_y_v = zimg_resize_create(translate_filter(filter), 0, node_vi->height, height, shift_h, subheight, filter_param_a, filter_param_b);
+		if (!resize_ctx_y_v) {
+			zimg_get_last_error(fail_str, sizeof(fail_str));
+			goto fail;
+		}
+		if (!zimg_resize_pixel_supported(resize_ctx_y_v, translate_pixel(out_vi.format))) {
+			strcpy(fail_str, "VSFormat not suported");
+			goto fail;
+		}
+	}
+
+	hfirst_y = zimg_resize_horizontal_first((double)node_vi->width / width, (double)node_vi->height / height);
 
 	if (node_fmt->subSamplingW || node_fmt->subSamplingH || subsample_w || subsample_h) {
 		int src_width_uv = node_vi->width >> node_fmt->subSamplingW;
@@ -666,12 +757,37 @@ static void VS_CC vs_resize_create(const VSMap *in, VSMap *out, void *userData, 
 		shift_w_uv += chroma_adjust_h(chroma_loc_in, chroma_loc_out, node_fmt->subSamplingW, subsample_w);
 		shift_h_uv += chroma_adjust_v(chroma_loc_in, chroma_loc_out, node_fmt->subSamplingH, subsample_h);
 
-		resize_ctx_uv = zimg_resize_create(translate_filter(filter_uv), src_width_uv, src_height_uv, width_uv, height_uv,
-		                                   shift_w_uv, shift_h_uv, subwidth_uv, subheight_uv, filter_param_a_uv, filter_param_b_uv);
-		if (!resize_ctx_uv) {
-			zimg_get_last_error(fail_str, sizeof(fail_str));
-			goto fail;
+		skip_h_uv = src_width_uv == width_uv && shift_w_uv == 0.0 && subwidth_uv == width_uv;
+		skip_v_uv = src_height_uv == height_uv && shift_h_uv == 0.0 && subheight_uv == height_uv;
+
+		if (!skip_h_uv) {
+			resize_ctx_uv_h = zimg_resize_create(translate_filter(filter_uv), 1, src_width_uv, width_uv, shift_w_uv, subwidth_uv, filter_param_a_uv, filter_param_b_uv);
+			if (!resize_ctx_uv_h) {
+				zimg_get_last_error(fail_str, sizeof(fail_str));
+				goto fail;
+			}
+			if (!zimg_resize_pixel_supported(resize_ctx_uv_h, translate_pixel(out_vi.format))) {
+				strcpy(fail_str, "VSFormat not suported");
+				goto fail;
+			}
 		}
+		if (!skip_v_uv) {
+			resize_ctx_uv_v = zimg_resize_create(translate_filter(filter_uv), 0, src_height_uv, height_uv, shift_h_uv, subheight_uv, filter_param_a_uv, filter_param_b_uv);
+			if (!resize_ctx_uv_v) {
+				zimg_get_last_error(fail_str, sizeof(fail_str));
+				goto fail;
+			}
+			if (!zimg_resize_pixel_supported(resize_ctx_uv_v, translate_pixel(out_vi.format))) {
+				strcpy(fail_str, "VSFormat not suported");
+				goto fail;
+			}
+		}
+
+		hfirst_uv = zimg_resize_horizontal_first((double)src_width_uv / width_uv, (double)src_height_uv / height_uv);
+		use_y_as_uv = 0;
+	} else {
+		hfirst_uv = 0;
+		use_y_as_uv = 1;
 	}
 
 	data = malloc(sizeof(vs_resize_data));
@@ -681,16 +797,65 @@ static void VS_CC vs_resize_create(const VSMap *in, VSMap *out, void *userData, 
 	}
 
 	data->node = node;
-	data->resize_ctx_y = resize_ctx_y;
-	data->resize_ctx_uv = resize_ctx_uv;
+
+	if (skip_h_y && skip_v_y) {
+		data->resize_ctx_y_1 = 0;
+		data->resize_ctx_y_2 = 0;
+	} else if (skip_h_y) {
+		data->resize_ctx_y_1 = resize_ctx_y_v;
+		data->resize_ctx_y_2 = 0;
+	} else if (skip_v_y) {
+		data->resize_ctx_y_1 = resize_ctx_y_h;
+		data->resize_ctx_y_2 = 0;
+	} else {
+		data->resize_ctx_y_1 = hfirst_y ? resize_ctx_y_h : resize_ctx_y_v;
+		data->resize_ctx_y_2 = hfirst_y ? resize_ctx_y_v : resize_ctx_y_h;
+	}
+
+	data->use_y_as_uv = use_y_as_uv;
+
+	if (!use_y_as_uv) {
+		if (skip_h_uv && skip_v_uv) {
+			data->resize_ctx_uv_1 = 0;
+			data->resize_ctx_uv_2 = 0;
+		} else if (skip_h_uv) {
+			data->resize_ctx_uv_1 = resize_ctx_uv_v;
+			data->resize_ctx_uv_2 = 0;
+		} else if (skip_v_uv) {
+			data->resize_ctx_uv_1 = resize_ctx_uv_h;
+			data->resize_ctx_uv_2 = 0;
+		} else {
+			data->resize_ctx_uv_1 = hfirst_uv ? resize_ctx_uv_h : resize_ctx_uv_v;
+			data->resize_ctx_uv_2 = hfirst_uv ? resize_ctx_uv_v : resize_ctx_uv_h;
+		}
+	}
+
+	if (!skip_h_y && !skip_v_y) {
+		data->tmp_width_y = hfirst_y ? width : node_vi->width;
+		data->tmp_height_y = hfirst_y ? node_vi->height : height;
+	} else {
+		data->tmp_width_y = 0;
+		data->tmp_height_y = 0;
+	}
+
+	if (!use_y_as_uv && !skip_h_uv && !skip_v_uv) {
+		data->tmp_width_uv = hfirst_uv ? width >> subsample_w : node_vi->width >> node_vi->format->subSamplingW;
+		data->tmp_height_uv = hfirst_uv ? node_vi->width >> node_vi->format->subSamplingH : height >> subsample_h;
+	} else {
+		data->tmp_width_uv = 0;
+		data->tmp_height_uv = 0;
+	}
+
 	data->vi = out_vi;
 
 	vsapi->createFilter(in, out, "resize", vs_resize_init, vs_resize_get_frame, vs_resize_free, fmParallel, 0, data, core);
 	return;
 fail:
 	vsapi->freeNode(node);
-	zimg_resize_delete(resize_ctx_y);
-	zimg_resize_delete(resize_ctx_uv);
+	zimg_resize_delete(resize_ctx_y_h);
+	zimg_resize_delete(resize_ctx_y_v);
+	zimg_resize_delete(resize_ctx_uv_h);
+	zimg_resize_delete(resize_ctx_uv_v);
 	free(data);
 	return;
 }

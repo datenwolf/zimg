@@ -49,6 +49,14 @@ public:
 	Resize(const Filter &f, bool horizontal, int src_dim, int dst_dim, double shift, double width, CPUClass cpu);
 
 	/**
+	 * Check if conversion supports the given pixel type.
+	 *
+	 * @param type pixel type
+	 * @return true if supported, else false
+	 */
+	bool pixel_supported(PixelType type) const;
+
+	/**
 	 * Get the input rectangle required to process an output tile.
 	 *
 	 * @param dst_top output top row index

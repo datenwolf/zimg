@@ -1,13 +1,9 @@
-#if 0
-
-#include <algorithm>
 #include <atomic>
-#include <cmath>
+#include <cassert>
+#include <cinttypes>
 #include <cstddef>
-#include <cstring>
 #include <memory>
 #include <utility>
-#include "Common/align.h"
 #include "Common/cpuinfo.h"
 #include "Common/except.h"
 #include "Common/osdep.h"
@@ -66,6 +62,19 @@ PixelType get_pixel_type(int pixel_type)
 	default:
 		throw ZimgIllegalArgument{ "unknown pixel type" };
 	}
+}
+
+PlaneDescriptor get_plane_desc(const zimg_image_tile_t *tile)
+{
+	PixelFormat format{ get_pixel_type(tile->pixel_type), tile->depth, !!tile->range, !!tile->chroma };
+	return{ format, tile->plane_width, tile->plane_height };
+}
+
+template <class T>
+void get_image_tile(const zimg_image_tile_t *tile, ImageTile<T> *ztile, PlaneDescriptor *desc)
+{
+	*desc = get_plane_desc(tile);
+	*ztile = ImageTile<T>{ static_cast<T *>(tile->buffer), desc, tile->stride };
 }
 
 colorspace::MatrixCoefficients get_matrix_coeffs(int matrix)
@@ -156,6 +165,15 @@ resize::Filter *create_filter(int filter_type, double filter_param_a, double fil
 	}
 }
 
+bool pointer_is_aligned(void *ptr)
+{
+#ifdef ZIMG_X86
+	return !ptr || reinterpret_cast<uintptr_t>(ptr) % 32 == 0;
+#else
+	return true;
+#endif
+}
+
 void handle_exception(const ZimgException &e)
 {
 	try {
@@ -189,38 +207,10 @@ void handle_bad_alloc()
 } // namespace
 
 
-struct zimg_colorspace_context {
-	colorspace::ColorspaceConversion p;
-};
-
-struct zimg_depth_context {
-	depth::Depth p;
-};
-
-struct zimg_resize_context {
-	std::unique_ptr<resize::Resize> pass1;
-	std::unique_ptr<resize::Resize> pass2;
-	int src_width;
-	int tmp_width;
-	int tmp_height;
-};
-
-
-int zimg_check_api_version(int ver)
-{
-	return ZIMG_API_VERSION >= ver;
-}
-
 int zimg_get_last_error(char *err_msg, size_t n)
 {
-	size_t sz;
-	size_t to_copy;
-
-	if (err_msg && n) {
-		sz = std::strlen(g_last_error_msg) + 1;
-		to_copy = sz > n ? n : sz;
-
-		std::memcpy(err_msg, g_last_error_msg, to_copy);
+	if (err_msg) {
+		strncpy(err_msg, g_last_error_msg, std::min(sizeof(g_last_error_msg), n));
 		err_msg[n - 1] = '\0';
 	}
 
@@ -229,15 +219,23 @@ int zimg_get_last_error(char *err_msg, size_t n)
 
 void zimg_clear_last_error(void)
 {
-	std::memset(g_last_error_msg, 0, sizeof(g_last_error_msg));
 	g_last_error = 0;
+	g_last_error_msg[0] = '\0';
 }
 
 void zimg_set_cpu(int cpu)
 {
-	g_cpu_type = get_cpu_class(cpu);
+	try {
+		g_cpu_type = get_cpu_class(cpu);
+	} catch (const ZimgException &e) {
+		handle_exception(e);
+	}
 }
 
+
+struct zimg_colorspace_context {
+	colorspace::ColorspaceConversion p;
+};
 
 zimg_colorspace_context *zimg_colorspace_create(int matrix_in, int transfer_in, int primaries_in,
                                                 int matrix_out, int transfer_out, int primaries_out)
@@ -248,15 +246,15 @@ zimg_colorspace_context *zimg_colorspace_create(int matrix_in, int transfer_in, 
 		colorspace::ColorspaceDefinition csp_in;
 		colorspace::ColorspaceDefinition csp_out;
 
-		csp_in.matrix = get_matrix_coeffs(matrix_in);
-		csp_in.transfer = get_transfer_characteristics(transfer_in);
-		csp_in.primaries = get_color_primaries(primaries_in);
+		csp_in.matrix     = get_matrix_coeffs(matrix_in);
+		csp_in.transfer   = get_transfer_characteristics(transfer_in);
+		csp_in.primaries  = get_color_primaries(primaries_in);
 
-		csp_out.matrix = get_matrix_coeffs(matrix_out);
-		csp_out.transfer = get_transfer_characteristics(transfer_out);
+		csp_out.matrix    = get_matrix_coeffs(matrix_out);
+		csp_out.transfer  = get_transfer_characteristics(transfer_out);
 		csp_out.primaries = get_color_primaries(primaries_out);
 
-		ret = new zimg_colorspace_context{ { csp_in, csp_out, g_cpu_type } };
+		ret = new zimg_colorspace_context{ colorspace::ColorspaceConversion{ csp_in, csp_out, g_cpu_type } };
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	} catch (const std::bad_alloc &) {
@@ -266,60 +264,58 @@ zimg_colorspace_context *zimg_colorspace_create(int matrix_in, int transfer_in, 
 	return ret;
 }
 
-size_t zimg_colorspace_tmp_size(zimg_colorspace_context *ctx, int)
+size_t zimg_colorspace_tmp_size(zimg_colorspace_context *ctx)
 {
-	return ctx->p.tmp_size(TILE_WIDTH, TILE_HEIGHT) * pixel_size(PixelType::FLOAT);
+	assert(ctx);
+	return ctx->p.tmp_size() * sizeof(float);
 }
 
-int zimg_colorspace_process(zimg_colorspace_context *ctx, const void * const src[3], void * const dst[3], void *tmp,
-                            int width, int height, const int src_stride[3], const int dst_stride[3], int pixel_type)
+int zimg_colorspace_pixel_supported(zimg_colorspace_context *ctx, int pixel_type)
 {
-	zimg_clear_last_error();
+	int ret = 0;
+
+	assert(ctx);
 
 	try {
-		PixelType type = get_pixel_type(pixel_type);
-		int pxsize = pixel_size(type);
-
-		PlaneDescriptor desc{ type };
-
-		ImageTile<const void> src_plane_tiles[3];
-		ImageTile<void> dst_plane_tiles[3];
-
-		ImageTile<const void> src_tiles[3];
-		ImageTile<void> dst_tiles[3];
-
-		if (!ctx->p.pixel_supported(type))
-			throw ZimgUnsupportedError{ "unsupported pixel format" };
-
-		for (int p = 0; p < 3; ++p) {
-			src_plane_tiles[p] = ImageTile<const void>{ src[p], &desc, src_stride[p], width, height };
-			dst_plane_tiles[p] = ImageTile<void>{ dst[p], &desc, dst_stride[p], width, height };
-		}
-
-		for (int i = 0; i < height; i += TILE_HEIGHT) {
-			for (int j = 0; j < width; j += TILE_WIDTH) {
-				int tile_h = std::min(height - i, TILE_HEIGHT);
-				int tile_w = std::min(width - j, TILE_WIDTH);
-
-				for (int p = 0; p < 3; ++p) {
-					src_tiles[p] = src_plane_tiles[p].sub_tile(i, j);
-					dst_tiles[p] = dst_plane_tiles[p].sub_tile(i, j);
-
-					src_tiles[p].width() = tile_w;
-					src_tiles[p].height() = tile_h;
-
-					dst_tiles[p].width() = tile_w;
-					dst_tiles[p].height() = tile_h;
-				}
-
-				ctx->p.process_tile(src_tiles, dst_tiles, tmp);
-			}
-		}
+		ret = ctx->p.pixel_supported(get_pixel_type(pixel_type));
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}
 
-	return g_last_error;
+	return ret;
+}
+
+int zimg_colorspace_process_tile(zimg_colorspace_context *ctx, const zimg_image_tile_t src[3], const zimg_image_tile_t dst[3], void *tmp, int pixel_type)
+{
+	int ret = 0;
+
+	assert(ctx);
+	assert(src && src[0].buffer && src[1].buffer && src[2].buffer);
+	assert(dst && dst[0].buffer && dst[1].buffer && dst[2].buffer);
+	assert(tmp && pointer_is_aligned(tmp));
+
+	assert(pointer_is_aligned(src[0].buffer) && pointer_is_aligned(src[1].buffer) && pointer_is_aligned(src[2].buffer));
+	assert(pointer_is_aligned(dst[0].buffer) && pointer_is_aligned(dst[1].buffer) && pointer_is_aligned(dst[2].buffer));
+
+	try {
+		PlaneDescriptor src_desc[3];
+		PlaneDescriptor dst_desc[3];
+
+		ImageTile<const void> src_tiles[3];
+		ImageTile<void> dst_tiles[3];
+
+		for (int p = 0; p < 3; ++p) {
+			get_image_tile(&src[p], &src_tiles[p], &src_desc[p]);
+			get_image_tile(&dst[p], &dst_tiles[p], &dst_desc[p]);
+		}
+
+		ctx->p.process_tile(src_tiles, dst_tiles, tmp);
+	} catch (const ZimgException &e) {
+		handle_exception(e);
+		ret = g_last_error;
+	}
+
+	return ret;
 }
 
 void zimg_colorspace_delete(zimg_colorspace_context *ctx)
@@ -328,13 +324,16 @@ void zimg_colorspace_delete(zimg_colorspace_context *ctx)
 }
 
 
+struct zimg_depth_context {
+	depth::Depth p;
+};
+
 zimg_depth_context *zimg_depth_create(int dither_type)
 {
 	zimg_depth_context *ret = nullptr;
 
 	try {
-		depth::DitherType dither = get_dither_type(dither_type);
-		ret = new zimg_depth_context{ { dither, g_cpu_type } };
+		ret = new zimg_depth_context{ depth::Depth{ get_dither_type(dither_type), g_cpu_type } };
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	} catch (const std::bad_alloc &) {
@@ -344,30 +343,57 @@ zimg_depth_context *zimg_depth_create(int dither_type)
 	return ret;
 }
 
-size_t zimg_depth_tmp_size(zimg_depth_context *ctx, int width)
+int zimg_depth_tile_supported(zimg_depth_context *ctx, int pixel_in, int pixel_out)
 {
-	return ctx->p.tmp_size(width) * pixel_size(PixelType::FLOAT);
-}
+	int ret = 0;
 
-int zimg_depth_process(zimg_depth_context *ctx, const void *src, void *dst, void *tmp,
-                       int width, int height, int src_stride, int dst_stride,
-					   int pixel_in, int pixel_out, int depth_in, int depth_out, int fullrange_in, int fullrange_out, int chroma)
-{
-	zimg_clear_last_error();
+	assert(ctx);
 
 	try {
-		PlaneDescriptor src_desc{ { get_pixel_type(pixel_in), depth_in, !!fullrange_in, !!chroma }, width, height };
-		PlaneDescriptor dst_desc{ { get_pixel_type(pixel_out), depth_out, !!fullrange_out, !!chroma }, width, height };
-
-		ImageTile<const void> src_tile{ src, &src_desc, src_stride, width, height };
-		ImageTile<void> dst_tile{ dst, &dst_desc, dst_stride, width, height };
-
-		ctx->p.process_tile(src_tile, dst_tile, tmp);
+		ret = ctx->p.tile_supported(get_pixel_type(pixel_in), get_pixel_type(pixel_out));
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}
 
-	return g_last_error;
+	return ret;
+}
+
+size_t zimg_depth_tmp_size(zimg_depth_context *ctx, int width)
+{
+	return ctx->p.tmp_size(width);
+}
+
+int zimg_depth_process(zimg_depth_context *ctx, const zimg_image_tile_t *src, const zimg_image_tile_t *dst, void *tmp)
+{
+	int ret = 0;
+
+	assert(ctx);
+	assert(src && src->buffer && pointer_is_aligned(src->buffer));
+	assert(dst && dst->buffer && pointer_is_aligned(dst->buffer));
+	assert(pointer_is_aligned(tmp));
+
+	try {
+		PlaneDescriptor src_desc;
+		PlaneDescriptor dst_desc;
+
+		ImageTile<const void> src_tile;
+		ImageTile<void> dst_tile;
+
+		get_image_tile(src, &src_tile, &src_desc);
+		get_image_tile(dst, &dst_tile, &dst_desc);
+
+		if (!ctx->p.tile_supported(src_desc.format.type, dst_desc.format.type)) {
+			assert(src->plane_offset_i == 0 && src->plane_offset_j == 0);
+			assert(dst->plane_offset_i == 0 && dst->plane_offset_j == 0);
+		}
+
+		ctx->p.process_tile(src_tile, dst_tile, tmp);
+	} catch (const ZimgException &e) {
+		handle_exception(e);
+		ret = g_last_error;
+	}
+
+	return ret;
 }
 
 void zimg_depth_delete(zimg_depth_context *ctx)
@@ -376,53 +402,23 @@ void zimg_depth_delete(zimg_depth_context *ctx)
 }
 
 
-zimg_resize_context *zimg_resize_create(int filter_type, int src_width, int src_height, int dst_width, int dst_height,
-                                        double shift_w, double shift_h, double subwidth, double subheight,
-                                        double filter_param_a, double filter_param_b)
+struct zimg_resize_context {
+	resize::Resize p;
+};
+
+int zimg_resize_horizontal_first(double xscale, double yscale)
+{
+	return resize::resize_horizontal_first(xscale, yscale);
+}
+
+zimg_resize_context *zimg_resize_create(int filter_type, int horizontal, int src_dim, int dst_dim,
+                                        double shift, double width, double filter_param_a, double filter_param_b)
 {
 	zimg_resize_context *ret = nullptr;
 
 	try {
-		std::unique_ptr<resize::Filter> filter{ create_filter(filter_type, filter_param_a, filter_param_b) };
-		std::unique_ptr<resize::Resize> resize_h;
-		std::unique_ptr<resize::Resize> resize_v;
-
-		std::unique_ptr<resize::Resize> pass1;
-		std::unique_ptr<resize::Resize> pass2;
-
-		bool skip_h = src_width == dst_width && shift_w == 0.0 && subwidth == src_width;
-		bool skip_v = src_height == dst_height && shift_h == 0.0 && subheight == src_height;
-		int tmp_width = 0;
-		int tmp_height = 0;
-
-		if (!skip_h)
-			resize_h.reset(new resize::Resize{ *filter, true, src_width, dst_width, shift_w, subwidth, g_cpu_type });
-		if (!skip_v)
-			resize_v.reset(new resize::Resize{ *filter, false, src_height, dst_height, shift_h, subheight, g_cpu_type });
-
-		if (!skip_h && !skip_v) {
-			bool hfirst = resize::resize_horizontal_first((double)dst_width / src_width, (double)dst_height / src_height);
-
-			if (hfirst) {
-				std::swap(resize_h, pass1);
-				std::swap(resize_v, pass2);
-
-				tmp_width = dst_width;
-				tmp_height = src_height;
-			} else {
-				std::swap(resize_v, pass1);
-				std::swap(resize_h, pass2);
-
-				tmp_width = src_width;
-				tmp_height = dst_height;
-			}
-		} else if (skip_h && !skip_v) {
-			std::swap(resize_v, pass1);
-		} else if (skip_v && !skip_h) {
-			std::swap(resize_h, pass1);
-		}
-
-		ret = new zimg_resize_context{ std::move(pass1), std::move(pass2), src_width, tmp_width, tmp_height };
+		std::unique_ptr<resize::Filter> f{ create_filter(filter_type, filter_param_a, filter_param_b) };
+		ret = new zimg_resize_context{ resize::Resize{ *f, !!horizontal, src_dim, dst_dim, shift, width, g_cpu_type } };
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	} catch (const std::bad_alloc &) {
@@ -432,25 +428,12 @@ zimg_resize_context *zimg_resize_create(int filter_type, int src_width, int src_
 	return ret;
 }
 
-size_t zimg_resize_tmp_size(zimg_resize_context *ctx, int pixel_type)
+int zimg_resize_pixel_supported(zimg_resize_context *ctx, int pixel_type)
 {
-	size_t ret = 0;
+	int ret = 0;
 
 	try {
-		PixelType type = get_pixel_type(pixel_type);
-		size_t tmp_pass1 = 0;
-		size_t tmp_pass2 = 0;
-
-		if (ctx->pass1)
-			tmp_pass1 = ctx->pass1->tmp_size(type, ctx->src_width) * pixel_size(type);
-		if (ctx->pass2)
-			tmp_pass2 = ctx->pass2->tmp_size(type, ctx->tmp_width) * pixel_size(type);
-
-		ret += std::max(tmp_pass1, tmp_pass2);
-
-		// Temporary frame.
-		if (ctx->pass1 && ctx->pass2)
-			ret += (size_t)ceil_n(ctx->tmp_width * pixel_size(type), ALIGNMENT) * ctx->tmp_height;
+		ret = ctx->p.pixel_supported(get_pixel_type(pixel_type));
 	} catch (const ZimgException &e) {
 		handle_exception(e);
 	}
@@ -458,51 +441,54 @@ size_t zimg_resize_tmp_size(zimg_resize_context *ctx, int pixel_type)
 	return ret;
 }
 
-int zimg_resize_process(zimg_resize_context *ctx, const void *src, void *dst, void *tmp,
-                        int src_width, int src_height, int dst_width, int dst_height,
-                        int src_stride, int dst_stride, int pixel_type)
+void zimg_resize_dependent_rect(zimg_resize_context *ctx, int dst_top, int dst_left, int dst_bottom, int dst_right,
+                                int *src_top, int *src_left, int *src_bottom, int *src_right)
 {
-	zimg_clear_last_error();
+	assert(ctx);
+	assert(dst_top >= 0 && dst_bottom > dst_top);
+	assert(dst_left >= 0 && dst_right > dst_left);
+	assert(src_top && src_left && src_bottom && src_right);
+
+	ctx->p.dependent_rect(dst_top, dst_left, dst_bottom, dst_right, src_top, src_left, src_bottom, src_right);
+}
+
+int zimg_resize_process_tile(zimg_resize_context *ctx, const zimg_image_tile_t *src, const zimg_image_tile_t *dst)
+{
+	int ret = 0;
+
+	assert(ctx);
+	assert(src && src->buffer);
+	assert(dst && dst->buffer && pointer_is_aligned(dst->buffer));
+	assert(src->plane_offset_i >= 0 && src->plane_offset_j >= 0);
+	assert(dst->plane_offset_i >= 0 && dst->plane_offset_j >= 0);
 
 	try {
-		PixelType type = get_pixel_type(pixel_type);
-		int tmp_stride = ceil_n(ctx->tmp_width * pixel_size(type), ALIGNMENT);
+		PlaneDescriptor src_desc;
+		PlaneDescriptor dst_desc;
 
-		PlaneDescriptor desc{ type };
+		ImageTile<const void> src_tile;
+		ImageTile<void> dst_tile;
 
-		ImageTile<const void> src_tile{ src, &desc, src_stride, src_width, src_height };
-		ImageTile<void> dst_tile{ dst, &desc, dst_stride, dst_width, dst_height };
+		int src_top, src_left, src_bottom, src_right;
 
-		int top, left, bottom, right;
+		get_image_tile(src, &src_tile, &src_desc);
+		get_image_tile(dst, &dst_tile, &dst_desc);
 
-		if (!ctx->pass1 && !ctx->pass2) {
-			copy_image_tile(src_tile, dst_tile);
-		} else if (ctx->pass1 && !ctx->pass2) {
-			ctx->pass1->dependent_rect(0, 0, dst_height, dst_width, &top, &left, &bottom, &right);
-			src_tile = src_tile.sub_tile(top, left);
-			ctx->pass1->process(src_tile, dst_tile, 0, 0, tmp);
-		} else {
-			ImageTile<void> tmp_tile{ tmp, &desc, tmp_stride, ctx->tmp_width, ctx->tmp_height };
-			tmp = (char *)tmp + (size_t)tmp_stride * ctx->tmp_height;
+		ctx->p.dependent_rect(dst->plane_offset_i, dst->plane_offset_j, dst->plane_offset_i + TILE_HEIGHT, dst->plane_offset_j + TILE_WIDTH,
+		                      &src_top, &src_left, &src_bottom, &src_right);
+		assert(src->plane_offset_i <= src_top && src->plane_offset_j <= src_left);
 
-			ctx->pass1->dependent_rect(0, 0, ctx->tmp_height, ctx->tmp_width, &top, &left, &bottom, &right);
-			src_tile = src_tile.sub_tile(top, left);
-			ctx->pass1->process(src_tile, tmp_tile, 0, 0, tmp);
-
-			ctx->pass2->dependent_rect(0, 0, dst_height, dst_width, &top, &left, &bottom, &right);
-			tmp_tile = tmp_tile.sub_tile(top, left);
-			ctx->pass2->process(tmp_tile, dst_tile, 0, 0, tmp);
-		}
+		src_tile = src_tile.sub_tile(src_top - src->plane_offset_i, src_left - src->plane_offset_j);
+		ctx->p.process(src_tile, dst_tile, dst->plane_offset_i, dst->plane_offset_j);
 	} catch (const ZimgException &e) {
 		handle_exception(e);
+		ret = g_last_error;
 	}
 
-	return g_last_error;
+	return ret;
 }
 
 void zimg_resize_delete(zimg_resize_context *ctx)
 {
 	delete ctx;
 }
-
-#endif

@@ -18,6 +18,11 @@ try :
 	throw ZimgOutOfMemory{};
 }
 
+bool Resize::pixel_supported(PixelType type) const
+{
+	return m_impl->pixel_supported(type);
+}
+
 void Resize::dependent_rect(int dst_top, int dst_left, int dst_bottom, int dst_right, int *src_top, int *src_left, int *src_bottom, int *src_right) const
 {
 	m_impl->dependent_rect(dst_top, dst_left, dst_bottom, dst_right, src_top, src_left, src_bottom, src_right);

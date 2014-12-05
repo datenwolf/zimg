@@ -6,6 +6,7 @@
 #include "Common/align.h"
 #include "Common/except.h"
 #include "Common/osdep.h"
+#include "Common/pixel.h"
 #include "Common/tile.h"
 #include "resize_impl.h"
 #include "resize_impl_x86.h"
@@ -462,7 +463,13 @@ void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile<const 
 class ResizeImplH_SSE2 : public ResizeImpl {
 public:
 	ResizeImplH_SSE2(const EvaluatedFilter &filter) : ResizeImpl(filter, true)
-	{}
+	{
+	}
+
+	bool pixel_supported(PixelType type) const override
+	{
+		return type == PixelType::WORD || type == PixelType::FLOAT;
+	}
 
 	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
@@ -489,7 +496,13 @@ public:
 class ResizeImplV_SSE2 : public ResizeImpl {
 public:
 	ResizeImplV_SSE2(const EvaluatedFilter &filter) : ResizeImpl(filter, false)
-	{}
+	{
+	}
+
+	bool pixel_supported(PixelType type) const override
+	{
+		return type == PixelType::WORD || type == PixelType::FLOAT;
+	}
 
 	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
