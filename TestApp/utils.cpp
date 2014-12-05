@@ -87,10 +87,14 @@ void convert_frame(const Frame &in, Frame &out, zimg::PixelType pxl_in, zimg::Pi
 		dst_desc.format.fullrange = plane_fullrange;
 		dst_desc.format.chroma = plane_chroma;
 
-		ImageTile<const void> src_tile{ in.data(p), &src_desc, src_byte_stride, width, height };
-		ImageTile<void> dst_tile{ out.data(p), &dst_desc, dst_byte_stride, width, height };
+		ImageTile<const void> src_tile{ in.data(p), &src_desc, src_byte_stride, };
+		ImageTile<void> dst_tile{ out.data(p), &dst_desc, dst_byte_stride };
 
-		convert->process_tile(src_tile, dst_tile, nullptr);
+		for (int i = 0; i < height; i += TILE_HEIGHT) {
+			for (int j = 0; j < width; j += TILE_WIDTH) {
+				convert->process_tile(src_tile.sub_tile(i, j), dst_tile.sub_tile(i, j), nullptr);
+			}
+		}
 	}
 }
 

@@ -1,3 +1,5 @@
+#if 0
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -502,3 +504,5 @@ void zimg_resize_delete(zimg_resize_context *ctx)
 {
 	delete ctx;
 }
+
+#endif

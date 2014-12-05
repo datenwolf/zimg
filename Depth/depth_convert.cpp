@@ -14,8 +14,8 @@ class DepthConvertC : public DepthConvert {
 	template <class T, class U, class Proc>
 	void process_tile(const ImageTile<const T> &src, const ImageTile<U> &dst, Proc proc) const
 	{
-		for (int i = 0; i < src.height(); ++i) {
-			for (int j = 0; j < src.width(); ++j) {
+		for (int i = 0; i < TILE_HEIGHT; ++i) {
+			for (int j = 0; j < TILE_WIDTH; ++j) {
 				dst[i][j] = proc(src[i][j]);
 			}
 		}

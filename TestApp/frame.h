@@ -24,7 +24,7 @@ public:
 
 	/**
 	 * Construct a frame with given dimensions.
-	 * The planes are zero-initialized.
+	 * The planes are zero-initialized and padded to a multiple of 64 pixels.
 	 *
 	 * @param width image width
 	 * @param height image height

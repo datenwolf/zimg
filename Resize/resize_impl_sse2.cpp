@@ -98,7 +98,7 @@ void resize_tile_u16_h_sse2(const EvaluatedFilter &filter, const ImageTile<const
 
 	int left_base = filter_left[0];
 
-	for (int i = 0; i < floor_n(dst.height(), 4); i += 4) {
+	for (int i = 0; i < TILE_HEIGHT; i += 4) {
 		const uint16_t *src_p0 = src[i + 0];
 		const uint16_t *src_p1 = src[i + 1];
 		const uint16_t *src_p2 = src[i + 2];
@@ -109,17 +109,12 @@ void resize_tile_u16_h_sse2(const EvaluatedFilter &filter, const ImageTile<const
 		uint16_t *dst_p2 = dst[i + 2];
 		uint16_t *dst_p3 = dst[i + 3];
 
-		int j;
-
-		for (j = 0; j < dst.width(); ++j) {
+		for (int j = 0; j < TILE_WIDTH; ++j) {
 			__m128i accum = _mm_setzero_si128();
 			__m128i cached[8];
 
 			const int16_t *filter_row = &filter_data[j * filter_stride];
 			int left = filter_left[j] - left_base;
-
-			if (left + filter_stride > src.width())
-				break;
 
 			for (int k = 0; k < (DoLoop ? filter.width() : 8); k += 8) {
 				__m128i coeff = _mm_load_si128((const __m128i *)&filter_row[k]);
@@ -175,9 +170,7 @@ void resize_tile_u16_h_sse2(const EvaluatedFilter &filter, const ImageTile<const
 				_mm_store_si128((__m128i *)&dst_p3[dst_j], packed);
 			}
 		}
-		resize_tile_h_scalar(filter, src, dst, n, i, floor_n(j, 8), i + 4, dst.width(), ScalarPolicy_U16{});
 	}
-	resize_tile_h_scalar(filter, src, dst, n, floor_n(dst.height(), 4), 0, dst.height(), dst.width(), ScalarPolicy_U16{});
 }
 
 template <bool DoLoop>
@@ -190,7 +183,7 @@ void resize_tile_fp_h_sse2(const EvaluatedFilter &filter, const ImageTile<const 
 
 	int left_base = filter_left[0];
 
-	for (int i = 0; i < floor_n(dst.height(), 4); i += 4) {
+	for (int i = 0; i < TILE_HEIGHT; i += 4) {
 		const float *src_p0 = src[i + 0];
 		const float *src_p1 = src[i + 1];
 		const float *src_p2 = src[i + 2];
@@ -201,17 +194,12 @@ void resize_tile_fp_h_sse2(const EvaluatedFilter &filter, const ImageTile<const 
 		float *dst_p2 = dst[i + 2];
 		float *dst_p3 = dst[i + 3];
 
-		int j;
-
-		for (j = 0; j < dst.width(); ++j) {
+		for (int j = 0; j < TILE_WIDTH; ++j) {
 			__m128 accum = _mm_setzero_ps();
 			__m128 cached[4];
 
 			const float *filter_row = &filter_data[j * filter_stride];
 			int left = filter_left[j] - left_base;
-
-			if (left + filter_stride > src.width())
-				break;
 
 			for (int k = 0; k < (DoLoop ? filter.width() : 4); k += 4) {
 				__m128 coeff = _mm_load_ps(filter_row + k);
@@ -250,9 +238,7 @@ void resize_tile_fp_h_sse2(const EvaluatedFilter &filter, const ImageTile<const 
 				_mm_store_ps(&dst_p3[dst_j], cached[3]);
 			}
 		}
-		resize_tile_h_scalar(filter, src, dst, n, i, floor_n(j, 4), i + 4, dst.width(), ScalarPolicy_F32{});
 	}
-	resize_tile_h_scalar(filter, src, dst, n, floor_n(dst.height(), 4), 0, dst.height(), dst.width(), ScalarPolicy_F32{});
 }
 
 void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int n, uint32_t *tmp)
@@ -266,7 +252,7 @@ void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile<const
 
 	int top_base = filter_left[0];
 
-	for (int i = 0; i < dst.height(); ++i) {
+	for (int i = 0; i < TILE_HEIGHT; ++i) {
 		const int16_t *filter_row = &filter_data[i * filter_stride];
 		int top = filter_left[i] - top_base;
 		uint16_t *dst_ptr = dst[i];
@@ -282,7 +268,7 @@ void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile<const
 			__m128i coeff2 = _mm_set1_epi16(filter_row[k + 2]);
 			__m128i coeff3 = _mm_set1_epi16(filter_row[k + 3]);
 
-			for (int j = 0; j < floor_n(dst.width(), 8); j += 8) {
+			for (int j = 0; j < TILE_WIDTH; j += 8) {
 				__m128i x0, x1, x2, x3;
 				__m128i packed;
 
@@ -337,7 +323,7 @@ void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile<const
 			__m128i coeff1 = _mm_set1_epi16(filter_row[k + 1]);
 			__m128i coeff2 = _mm_set1_epi16(filter_row[k + 2]);
 
-			for (int j = 0; j < floor_n(dst.width(), 8); j += 8) {
+			for (int j = 0; j < TILE_WIDTH; j += 8) {
 				__m128i x0, x1, x2;
 				__m128i packed;
 
@@ -375,7 +361,6 @@ void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile<const
 				_mm_store_si128((__m128i *)&dst_ptr[j], packed);
 			}
 		}
-		resize_tile_v_scalar(filter, src, dst, n, i, floor_n(dst.width(), 8), i + 1, dst.width(), ScalarPolicy_U16{});
 	}
 }
 
@@ -388,7 +373,7 @@ void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile<const 
 
 	int top_base = filter_left[0];
 
-	for (int i = 0; i < dst.height(); ++i) {
+	for (int i = 0; i < TILE_HEIGHT; ++i) {
 		const float *filter_row = &filter_data[i * filter_stride];
 		int top = filter_left[i] - top_base;
 		float *dst_ptr = dst[i];
@@ -404,7 +389,7 @@ void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile<const 
 			__m128 coeff2 = _mm_set_ps1(filter_row[k + 2]);
 			__m128 coeff3 = _mm_set_ps1(filter_row[k + 3]);
 
-			for (int j = 0; j < floor_n(dst.width(), 4); j += 4) {
+			for (int j = 0; j < TILE_WIDTH; j += 4) {
 				__m128 x0, x1, x2, x3;
 				__m128 accum0, accum1;
 
@@ -442,7 +427,7 @@ void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile<const 
 			__m128 coeff1 = _mm_set_ps1(filter_row[k + 1]);
 			__m128 coeff2 = _mm_set_ps1(filter_row[k + 2]);
 
-			for (int j = 0; j < floor_n(dst.width(), 4); j += 4) {
+			for (int j = 0; j < TILE_WIDTH; j += 4) {
 				__m128 x0, x1, x2;
 
 				__m128 accum0 = _mm_setzero_ps();
@@ -469,7 +454,6 @@ void resize_tile_fp_v_sse2(const EvaluatedFilter &filter, const ImageTile<const 
 				_mm_store_ps(&dst_ptr[j], accum0);
 			}
 		}
-		resize_tile_v_scalar(filter, src, dst, n, i, floor_n(dst.width(), 4), i + 1, dst.width(), ScalarPolicy_F32{});
 	}
 }
 

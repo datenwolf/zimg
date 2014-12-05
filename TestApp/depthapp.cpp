@@ -108,10 +108,18 @@ void execute(const depth::Depth &depth, const Frame &in, Frame &out, int times,
 			PlaneDescriptor src_desc{ { pxl_in, bits_in, fullrange_in, chroma }, width, height };
 			PlaneDescriptor dst_desc{ { pxl_out, bits_out, fullrange_out, chroma }, width, height };
 
-			ImageTile<const void> src_tile{ in.data(p), &src_desc, src_byte_stride, width, height };
-			ImageTile<void> dst_tile{ out.data(p), &dst_desc, dst_byte_stride, width, height };
+			ImageTile<const void> src_tile{ in.data(p), &src_desc, src_byte_stride };
+			ImageTile<void> dst_tile{ out.data(p), &dst_desc, dst_byte_stride };
 
-			depth.process_tile(src_tile, dst_tile, tmp.data());
+			if (depth.tile_supported(pxl_in, pxl_out)) {
+				for (int i = 0; i < height; i += TILE_HEIGHT) {
+					for (int j = 0; j < width; j += TILE_WIDTH) {
+						depth.process_tile(src_tile.sub_tile(i, j), dst_tile.sub_tile(i, j), tmp.data());
+					}
+				}
+			} else {
+				depth.process_tile(src_tile, dst_tile, tmp.data());
+			}
 		}
 	});
 }
@@ -130,13 +138,17 @@ void export_for_bmp(const Frame &in, Frame &out, PixelType type, int bits, bool 
 	for (int p = 0; p < 3; ++p) {
 		bool chroma = yuv && (p == 1 || p == 2);
 
-		PlaneDescriptor src_desc{ { type, bits, fullrange, chroma }, width, height };
-		PlaneDescriptor dst_desc{ { PixelType::BYTE, 8, fullrange, chroma }, width, height };
+		PlaneDescriptor src_desc{ PixelFormat{ type, bits, fullrange, chroma } };
+		PlaneDescriptor dst_desc{ PixelFormat{ PixelType::BYTE, 8, fullrange, chroma } };
 
-		ImageTile<const void> src_tile{ in.data(p), &src_desc, src_byte_stride, width, height };
-		ImageTile<void> dst_tile{ out.data(p), &dst_desc, dst_byte_stride, width, height };
+		ImageTile<const void> src_tile{ in.data(p), &src_desc, src_byte_stride };
+		ImageTile<void> dst_tile{ out.data(p), &dst_desc, dst_byte_stride };
 
-		depth.process_tile(src_tile, dst_tile, tmp.data());
+		for (int i = 0; i < height; i += TILE_HEIGHT) {
+			for (int j = 0; j < width; j += TILE_WIDTH) {
+				depth.process_tile(src_tile.sub_tile(i, j), dst_tile.sub_tile(i, j), tmp.data());
+			}
+		}
 	}
 }
 

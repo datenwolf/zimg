@@ -10,6 +10,102 @@ namespace resize {;
 
 namespace {;
 
+struct ScalarPolicy_U16 {
+	typedef uint16_t data_type;
+	typedef int32_t num_type;
+
+	int32_t coeff(const EvaluatedFilter &filter, int row, int k)
+	{
+		return filter.data_i16()[row * filter.stride_i16() + k];
+	}
+
+	int32_t load(const uint16_t *src)
+	{
+		uint16_t x = *src;
+		return (int32_t)x + (int32_t)INT16_MIN; // Make signed.
+	}
+
+	void store(uint16_t *dst, int32_t x)
+	{
+		// Convert from 16.14 to 16.0.
+		x = ((x + (1 << 13)) >> 14) - (int32_t)INT16_MIN;
+
+		// Clamp out of range values.
+		x = std::max(std::min(x, (int32_t)UINT16_MAX), (int32_t)0);
+
+		*dst = (uint16_t)x;
+	}
+};
+
+struct ScalarPolicy_F32 {
+	typedef float data_type;
+	typedef float num_type;
+
+	float coeff(const EvaluatedFilter &filter, int row, int k)
+	{
+		return filter.data()[row * filter.stride() + k];
+	}
+
+	float load(const float *src) { return *src; }
+
+	void store(float *dst, float x) { *dst = x; }
+};
+
+template <class T, class Policy>
+void resize_tile_h_scalar(const EvaluatedFilter &filter, const ImageTile<const T> &src, const ImageTile<T> &dst, int n, Policy policy)
+{
+	typedef typename Policy::data_type data_type;
+	typedef typename Policy::num_type num_type;
+
+	int left_base = filter.left()[n];
+	
+	for (int i = 0; i < TILE_HEIGHT; ++i) {
+		for (int j = 0; j < TILE_WIDTH; ++j) {
+			int filter_row = n + j;
+			int left = filter.left()[filter_row] - left_base;
+
+			num_type accum = 0;
+
+			for (int k = 0; k < filter.width(); ++k) {
+				num_type coeff = policy.coeff(filter, filter_row, k);
+				num_type x = policy.load(&src[i][left + k]);
+
+				accum += coeff * x;
+			}
+
+			policy.store(&dst[i][j], accum);
+		}
+	}
+}
+
+template <class T, class Policy>
+void resize_tile_v_scalar(const EvaluatedFilter &filter, const ImageTile<const T> &src, const ImageTile<T> &dst, int n, Policy policy)
+{
+	typedef typename Policy::data_type data_type;
+	typedef typename Policy::num_type num_type;
+
+	int top_base = filter.left()[n];
+
+	for (int i = 0; i < TILE_HEIGHT; ++i) {
+		int filter_row = n + i;
+		int top = filter.left()[filter_row] - top_base;
+
+		for (int j = 0; j < TILE_WIDTH; ++j) {
+			num_type accum = 0;
+
+			for (int k = 0; k < filter.width(); ++k) {
+				num_type coeff = policy.coeff(filter, filter_row, k);
+				num_type x = policy.load(&src[top + k][j]);
+
+				accum += coeff * x;
+			}
+
+			policy.store(&dst[i][j], accum);
+		}
+	}
+}
+
+
 class ResizeImplH_C final : public ResizeImpl {
 public:
 	ResizeImplH_C(const EvaluatedFilter &filter) : ResizeImpl(filter, true)
@@ -18,7 +114,7 @@ public:
 	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		const EvaluatedFilter &filter = m_filter;
-		resize_tile_h_scalar(filter, src, dst, j, 0, 0, dst.height(), dst.width(), ScalarPolicy_U16{});
+		resize_tile_h_scalar(filter, src, dst, j, ScalarPolicy_U16{});
 	}
 
 	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
@@ -29,7 +125,7 @@ public:
 	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
 	{
 		const EvaluatedFilter &filter = m_filter;
-		resize_tile_h_scalar(filter, src, dst, j, 0, 0, dst.height(), dst.width(), ScalarPolicy_F32{});
+		resize_tile_h_scalar(filter, src, dst, j, ScalarPolicy_F32{});
 	}
 };
 
@@ -41,7 +137,7 @@ public:
 	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
 	{
 		const EvaluatedFilter &filter = m_filter;
-		resize_tile_v_scalar(filter, src, dst, i, 0, 0, dst.height(), dst.width(), ScalarPolicy_U16{});
+		resize_tile_v_scalar(filter, src, dst, i, ScalarPolicy_U16{});
 	}
 
 	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
@@ -52,7 +148,7 @@ public:
 	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
 	{
 		const EvaluatedFilter &filter = m_filter;
-		resize_tile_v_scalar(filter, src, dst, i, 0, 0, dst.height(), dst.width(), ScalarPolicy_F32{});
+		resize_tile_v_scalar(filter, src, dst, i, ScalarPolicy_F32{});
 	}
 };
 

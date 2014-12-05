@@ -69,10 +69,10 @@ class OrderedDitherC : public OrderedDither {
 		float scale = 1.0f / (float)(1 << (depth - 1));
 		auto dither_pixel = [=](T x, float d) { return from_float(to_float(x) + d * scale); };
 
-		for (int i = 0; i < src.height(); ++i) {
+		for (int i = 0; i < TILE_HEIGHT; ++i) {
 			const float *dither_row = &dither_data[(i % NUM_DITHERS_V) * NUM_DITHERS_H];
 
-			for (int j = 0; j < src.width(); ++j) {
+			for (int j = 0; j < TILE_WIDTH; ++j) {
 				dst[i][j] = dither_pixel(src[i][j], dither_row[j % NUM_DITHERS_H]);
 			}
 		}

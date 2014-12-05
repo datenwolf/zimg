@@ -6,6 +6,7 @@
 #define ZIMG_DEPTH_DEPTH_CONVERT_X86_H_
 
 #include "Common/align.h"
+#include "Common/tile.h"
 #include "depth_convert.h"
 
 namespace zimg {;
@@ -46,11 +47,11 @@ protected:
 		src_vector_type src_unpacked[loop_unroll_unpack::value * Unpack::unpacked_count];
 		dst_vector_type dst_unpacked[loop_unroll_pack::value * Pack::unpacked_count];
 
-		for (int i = 0; i < src.height(); ++i) {
+		for (int i = 0; i < TILE_HEIGHT; ++i) {
 			const T *src_ptr = src[i];
 			U *dst_ptr = dst[i];
 
-			for (int j = 0; j < floor_n(src.width(), loop_step::value); j += loop_step::value) {
+			for (int j = 0; j < TILE_WIDTH; j += loop_step::value) {
 				for (int k = 0; k < loop_unroll_unpack::value; ++k) {
 					unpack.unpack(&src_unpacked[k * Unpack::unpacked_count], &src_ptr[j + k * Unpack::loop_step]);
 				}
@@ -62,9 +63,6 @@ protected:
 				for (int k = 0; k < loop_unroll_pack::value; ++k) {
 					pack.pack(&dst_ptr[j + k * Pack::loop_step], &dst_unpacked[k * Pack::unpacked_count]);
 				}
-			}
-			for (int j = floor_n(src.width(), loop_step::value); j < src.width(); ++j) {
-				dst_ptr[j] = scalar_op(src_ptr[j]);
 			}
 		}
 	}

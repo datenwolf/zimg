@@ -52,10 +52,10 @@ Frame::Frame(int width, int height, int pxsize, int planes) :
 	m_width{ width },
 	m_height{ height },
 	m_pxsize{ pxsize },
-	m_stride{ ceil_n(width, ALIGNMENT / pxsize) },
+	m_stride{ ceil_n(width + 64, 64) },
 	m_planes{ planes }
 {
-	size_t plane_sz = (size_t)m_stride * height * pxsize;
+	size_t plane_sz = (size_t)m_stride * ceil_n(height, 64) * pxsize;
 
 	for (int p = 0; p < planes; ++p) {
 		m_data[p].resize(plane_sz);

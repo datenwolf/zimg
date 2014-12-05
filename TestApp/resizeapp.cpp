@@ -125,8 +125,8 @@ void execute(const resize::Resize *resize_h, const resize::Resize *resize_v, con
 		}
 	}
 
-	int tmp_stride = ceil_n(tmp_width, ALIGNMENT / pxsize);
-	auto tmp_frame = allocate_buffer((size_t)tmp_stride * tmp_height, type);
+	int tmp_stride = ceil_n(tmp_width + TILE_WIDTH, TILE_WIDTH);
+	auto tmp_frame = allocate_buffer((size_t)tmp_stride * ceil_n(tmp_height, TILE_HEIGHT), type);
 	auto tmp_buffer = allocate_buffer(tmp_size, type);
 
 	convert_frame(in, src, PixelType::BYTE, type, true, false);
@@ -136,40 +136,39 @@ void execute(const resize::Resize *resize_h, const resize::Resize *resize_v, con
 		PlaneDescriptor desc{ type };
 
 		for (int p = 0; p < planes; ++p) {
-			ImageTile<const void> src_tile{ src.data(p), &desc, src.stride() * pxsize, src.width(), src.height() };
-			ImageTile<void> dst_tile{ dst.data(p), &desc, dst.stride() * pxsize, dst.width(), dst.height() };
+			ImageTile<const void> src_tile{ src.data(p), &desc, src.stride() * pxsize };
+			ImageTile<void> dst_tile{ dst.data(p), &desc, dst.stride() * pxsize };
 
 			int top, left, bottom, right;
 
 			if (skip_h && skip_v) {
-				copy_image_tile(src_tile, dst_tile);
-			} else if (skip_h && !skip_v) {
-				resize_v->dependent_rect(0, 0, dst.width(), dst.height(), &top, &left, &bottom, &right);
-				src_tile = src_tile.sub_tile(top, left);
-				resize_v->process(src_tile, dst_tile, 0, 0, tmp_buffer.data());
-			} else if (skip_v && !skip_h) {
-				resize_h->dependent_rect(0, 0, dst.width(), dst.height(), &top, &left, &bottom, &right);
-				src_tile = src_tile.sub_tile(top, left);
-				resize_h->process(src_tile, dst_tile, 0, 0, tmp_buffer.data());
+				dst = src;
+			} else if ((skip_h && !skip_v) || (skip_v && !skip_h)) {
+				const resize::Resize *r = skip_v ? resize_h : resize_v;
+
+				for (int i = 0; i < dst.height(); i += TILE_HEIGHT) {
+					for (int j = 0; j < dst.width(); j += TILE_WIDTH) {
+						r->dependent_rect(i, j, i + TILE_HEIGHT, j + TILE_WIDTH, &top, &left, &bottom, &right);
+						r->process(src_tile.sub_tile(top, left), dst_tile.sub_tile(i, j), i, j, tmp_buffer.data());
+					}
+				}
 			} else {
-				ImageTile<void> tmp_tile{ tmp_frame.data(), &desc, tmp_stride * pxsize, tmp_width, tmp_height };
+				ImageTile<void> tmp_tile{ tmp_frame.data(), &desc, tmp_stride * pxsize };
 
-				if (hfirst) {
-					resize_h->dependent_rect(0, 0, tmp_width, tmp_height, &top, &left, &bottom, &right);
-					src_tile = src_tile.sub_tile(top, left);
-					resize_h->process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
+				const resize::Resize *r1 = hfirst ? resize_h : resize_v;
+				const resize::Resize *r2 = hfirst ? resize_v : resize_h;
 
-					resize_v->dependent_rect(0, 0, dst.width(), dst.height(), &top, &left, &bottom, &right);
-					src_tile = src_tile.sub_tile(top, left);
-					resize_v->process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
-				} else {
-					resize_v->dependent_rect(0, 0, tmp_width, tmp_height, &top, &left, &bottom, &right);
-					src_tile = src_tile.sub_tile(top, left);
-					resize_v->process(src_tile, tmp_tile, 0, 0, tmp_buffer.data());
-
-					resize_h->dependent_rect(0, 0, dst.width(), dst.height(), &top, &left, &bottom, &right);
-					src_tile = src_tile.sub_tile(top, left);
-					resize_h->process(tmp_tile, dst_tile, 0, 0, tmp_buffer.data());
+				for (int i = 0; i < tmp_height; i += TILE_HEIGHT) {
+					for (int j = 0; j < tmp_width; j += TILE_WIDTH) {
+						r1->dependent_rect(i, j, i + TILE_HEIGHT, j + TILE_WIDTH, &top, &left, &bottom, &right);
+						r1->process(src_tile.sub_tile(top, left), tmp_tile.sub_tile(i, j), i, j, tmp_buffer.data());
+					}
+				}
+				for (int i = 0; i < dst.height(); i += TILE_HEIGHT) {
+					for (int j = 0; j < dst.width(); j += TILE_WIDTH) {
+						r2->dependent_rect(i, j, i + TILE_HEIGHT, j + TILE_WIDTH, &top, &left, &bottom, &right);
+						r2->process(tmp_tile.sub_tile(top, left), dst_tile.sub_tile(i, j), i, j, tmp_buffer.data());
+					}
 				}
 			}
 		}

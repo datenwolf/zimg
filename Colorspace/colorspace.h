@@ -65,7 +65,7 @@ public:
 	 * @param height height of image tile
 	 * @return the size of the temporary buffer in units of floats
 	 */
-	size_t tmp_size(int width, int height) const;
+	size_t tmp_size() const;
 
 	/**
 	 * Process a tile. The input and output pixel formats must match.

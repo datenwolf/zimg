@@ -51,8 +51,6 @@ class ImageTile {
 	T *m_ptr;
 	const PlaneDescriptor *m_descriptor;
 	int m_byte_stride;
-	int m_width;
-	int m_height;
 
 	template <class U = T>
 	int x_bytes_per_pixel(typename std::enable_if<std::is_void<U>::value>::type *x = nullptr) const
@@ -90,12 +88,10 @@ public:
 	 * @param width width of tile
 	 * @param height height of tile
 	 */
-	ImageTile(T *ptr, const PlaneDescriptor *descriptor, int byte_stride, int width = TILE_WIDTH, int height = TILE_HEIGHT) :
+	ImageTile(T *ptr, const PlaneDescriptor *descriptor, int byte_stride) :
 		m_ptr{ ptr },
 		m_descriptor{ descriptor },
-		m_byte_stride{ byte_stride },
-		m_width{ width },
-		m_height{ height }
+		m_byte_stride{ byte_stride }
 	{
 	}
 
@@ -110,9 +106,7 @@ public:
 	                                  !std::is_same<U, const_type>::value>::type *x = nullptr) :
 		m_ptr{ const_cast<T *>(other.data()) },
 		m_descriptor{ other.descriptor() },
-		m_byte_stride{ other.byte_stride() },
-		m_width{ other.width() },
-		m_height{ other.height() }
+		m_byte_stride{ other.byte_stride() }
 	{
 	}
 
@@ -138,38 +132,6 @@ public:
 	int byte_stride() const
 	{
 		return m_byte_stride;
-	}
-
-	/**
-	 * @return reference to width of tile
-	 */
-	int &width()
-	{
-		return m_width;
-	}
-
-	/**
-	 * @return reference to height of tile
-	 */
-	int &height()
-	{
-		return m_height;
-	}
-
-	/**
-	 * @return width of tile
-	 */
-	int width() const
-	{
-		return m_width;
-	}
-
-	/**
-	 * @return height of tile
-	 */
-	int height() const
-	{
-		return m_height;
 	}
 
 	/**
@@ -212,18 +174,38 @@ public:
 	 */
 	ImageTile sub_tile(int i, int j) const
 	{
-		return{ address_of(i, j), m_descriptor, m_byte_stride, m_width - j, m_height - i };
+		return{ address_of(i, j), m_descriptor, m_byte_stride };
 	}
 };
 
 template <class T, class U>
 ImageTile<T> tile_cast(const ImageTile<U> &tile)
 {
-	return{ static_cast<T *>(tile.data()), tile.descriptor(), tile.byte_stride(), tile.width(), tile.height() };
+	return{ static_cast<T *>(tile.data()), tile.descriptor(), tile.byte_stride() };
 }
 
 /**
- * Copy an image tile. The tiles must have identical dimensions and formats.
+ * Copy a partial image tile. The tiles must have identical formats.
+ *
+ * @param src input tile
+ * @param dst output tile
+ * @param width columns to copy
+ * @param height rows to copy
+ */
+template <class T>
+inline void copy_image_tile_partial(const ImageTile<const T> &src, const ImageTile<T> &dst, int width, int height)
+{
+	for (int i = 0; i < height; ++i) {
+		const char *src_ptr = reinterpret_cast<const char *>(src[i]);
+		char *dst_ptr = reinterpret_cast<char *>(dst[i]);
+		int line_size = width * src.bytes_per_pixel();
+
+		std::copy_n(src_ptr, line_size, dst_ptr);
+	}
+}
+
+/**
+ * Copy an image tile. The tiles must have identical formats.
  *
  * @param src input tile
  * @param dst output tile
@@ -231,13 +213,7 @@ ImageTile<T> tile_cast(const ImageTile<U> &tile)
 template <class T>
 inline void copy_image_tile(const ImageTile<const T> &src, const ImageTile<T> &dst)
 {
-	for (int i = 0; i < src.height(); ++i) {
-		const char *src_ptr = reinterpret_cast<const char *>(src[i]);
-		char *dst_ptr = reinterpret_cast<char *>(dst[i]);
-		int line_size = src.width() * src.bytes_per_pixel();
-
-		std::copy_n(src_ptr, line_size, dst_ptr);
-	}
+	copy_image_tile_partial(src, dst, TILE_WIDTH, TILE_HEIGHT);
 }
 
 } // namespace zimg

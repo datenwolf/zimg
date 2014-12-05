@@ -5,6 +5,7 @@
 #ifndef ZIMG_DEPTH_DITHER_IMPL_X86_H_
 #define ZIMG_DEPTH_DITHER_IMPL_X86_H_
 
+#include "Common/tile.h"
 #include "dither_impl.h"
 
 namespace zimg {;
@@ -47,7 +48,7 @@ protected:
 		float scale = 1.0f / (float)(1 << (depth - 1));
 		vector_type scale_ps = policy.set1(scale);
 
-		for (int i = 0; i < src.height(); ++i) {
+		for (int i = 0; i < TILE_HEIGHT; ++i) {
 			const T *src_row = src[i];
 			U * dst_row = dst[i];
 
@@ -57,7 +58,7 @@ protected:
 			src_vector_type src_unpacked[loop_unroll_unpack::value * Unpack::unpacked_count];
 			dst_vector_type dst_unpacked[loop_unroll_pack::value * Pack::unpacked_count];
 
-			for (int j = 0; j < floor_n(src.width(), loop_step::value); j += loop_step::value) {
+			for (int j = 0; j < TILE_WIDTH; j += loop_step::value) {
 				for (int k = 0; k < loop_unroll_unpack::value; ++k) {
 					unpack.unpack(&src_unpacked[k * Unpack::unpacked_count], &src_row[j + k * Unpack::loop_step]);
 				}
@@ -78,14 +79,6 @@ protected:
 					pack.pack(&dst_row[j + k * Pack::loop_step], &dst_unpacked[k * Pack::unpacked_count]);
 				}
 
-				m %= NUM_DITHERS_H;
-			}
-
-			for (int j = floor_n(src.width(), loop_step::value); j < src.width(); ++j) {
-				float x = to_float_scalar(src_row[j]);
-				float d = dither_row[m++];
-
-				dst_row[j] = from_float_scalar(x + d * scale);
 				m %= NUM_DITHERS_H;
 			}
 		}

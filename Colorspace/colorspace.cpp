@@ -40,7 +40,7 @@ try :
 void ColorspaceConversion::load_tile(const ImageTile<const void> &src, float *dst) const
 {
 	PlaneDescriptor desc{ PixelType::FLOAT };
-	ImageTile<float> dst_tile{ dst, &desc, ceil_n(src.width() * (int)sizeof(float), ALIGNMENT), src.width(), src.height() };
+	ImageTile<float> dst_tile{ dst, &desc, TILE_WIDTH * sizeof(float) };
 
 	switch (src.descriptor()->format.type) {
 	case PixelType::HALF:
@@ -57,7 +57,7 @@ void ColorspaceConversion::load_tile(const ImageTile<const void> &src, float *ds
 void ColorspaceConversion::store_tile(const float *src, const ImageTile<void> &dst) const
 {
 	PlaneDescriptor desc{ PixelType::FLOAT };
-	ImageTile<const float> src_tile{ src, &desc, ceil_n(dst.width() * (int)sizeof(float), ALIGNMENT), dst.width(), dst.height() };
+	ImageTile<const float> src_tile{ src, &desc, TILE_WIDTH * sizeof(float) };
 
 	switch (dst.descriptor()->format.type) {
 	case PixelType::HALF:
@@ -76,27 +76,26 @@ bool ColorspaceConversion::pixel_supported(PixelType type) const
 	return (m_pixel_adapter && type == PixelType::HALF) || type == PixelType::FLOAT;
 }
 
-size_t ColorspaceConversion::tmp_size(int width, int height) const
+size_t ColorspaceConversion::tmp_size() const
 {
-	size_t stride = ceil_n(width, AlignmentOf<float>::value);
-	return 3 * stride * height;
+	return 3 * TILE_WIDTH * TILE_HEIGHT;
 }
 
 void ColorspaceConversion::process_tile(const ImageTile<const void> src[3], const ImageTile<void> dst[3], void *tmp) const
 {
-	int tmp_tile_size = ceil_n(src[0].width(), AlignmentOf<float>::value) * src[0].height();
+	int tile_size = TILE_WIDTH * TILE_HEIGHT;
 	float *tmp_ptr[3];
 
-	tmp_ptr[0] = (float *)tmp + 0 * tmp_tile_size;
-	tmp_ptr[1] = (float *)tmp + 1 * tmp_tile_size;
-	tmp_ptr[2] = (float *)tmp + 2 * tmp_tile_size;
+	tmp_ptr[0] = (float *)tmp + 0 * tile_size;
+	tmp_ptr[1] = (float *)tmp + 1 * tile_size;
+	tmp_ptr[2] = (float *)tmp + 2 * tile_size;
 
 	load_tile(src[0], tmp_ptr[0]);
 	load_tile(src[1], tmp_ptr[1]);
 	load_tile(src[2], tmp_ptr[2]);
 
 	for (const auto &op : m_operations) {
-		op->process(tmp_ptr, tmp_tile_size);
+		op->process(tmp_ptr, tile_size);
 	}
 
 	store_tile(tmp_ptr[0], dst[0]);

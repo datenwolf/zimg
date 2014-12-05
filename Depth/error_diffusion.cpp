@@ -19,7 +19,7 @@ class ErrorDiffusionC : public DitherConvert {
 		float dequant_scale = 1.0f / quant_scale;
 
 		float *prev_line = tmp + 1;
-		float *curr_line = prev_line + src.width() + 2;
+		float *curr_line = prev_line + src.descriptor()->width + 2;
 
 		std::fill_n(tmp, (src.descriptor()->width + 2) * 2, 0.0f);
 
