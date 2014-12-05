@@ -49,15 +49,6 @@ public:
 	Resize(const Filter &f, bool horizontal, int src_dim, int dst_dim, double shift, double width, CPUClass cpu);
 
 	/**
-	 * Get the size of the temporary buffer required by the filter.
-	 *
-	 * @param type pixel type to process
-	 * @param width input width
-	 * @return the size of temporary buffer in units of pixels
-	 */
-	size_t tmp_size(PixelType type, int width) const;
-
-	/**
 	 * Get the input rectangle required to process an output tile.
 	 *
 	 * @param dst_top output top row index
@@ -79,10 +70,9 @@ public:
 	 * @param dst output tile
 	 * @param i row index of output tile
 	 * @param j column index of output tile
-	 * @param tmp temporary buffer (@see Resize::tmp_size)
 	 * @throws ZimgUnsupportedError if pixel type not supported
 	 */
-	void process(const ImageTile<const void> &src, const ImageTile<void> &dst, int i, int j, void *tmp) const;
+	void process(const ImageTile<const void> &src, const ImageTile<void> &dst, int i, int j) const;
 };
 
 /**

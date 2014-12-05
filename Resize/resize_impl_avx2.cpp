@@ -341,9 +341,11 @@ void resize_tile_fp_h_avx2(const EvaluatedFilter &filter, const ImageTile<const 
 	}
 }
 
-void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int n, uint32_t *tmp)
+void resize_tile_u16_v_avx2(const EvaluatedFilter &filter, const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int n)
 {
 	__m256i INT16_MIN_EPI16 = _mm256_set1_epi16(INT16_MIN);
+	__m256i tmp_m256i[TILE_WIDTH / 8];
+	uint32_t *tmp = (uint32_t *)tmp_m256i;
 
 	int filter_stride = filter.stride_i16();
 
@@ -655,7 +657,7 @@ public:
 	ResizeImplH_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter, true)
 	{}
 
-	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
 		if (m_filter.width() > 16)
 			resize_tile_u16_h_avx2<true>(m_filter, src, dst, j);
@@ -663,7 +665,7 @@ public:
 			resize_tile_u16_h_avx2<false>(m_filter, src, dst, j);
 	}
 
-	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
 		if (m_filter.width() > 8)
 			resize_tile_fp_h_avx2<true>(m_filter, src, dst, j, VectorPolicy_F16{});
@@ -671,7 +673,7 @@ public:
 			resize_tile_fp_h_avx2<false>(m_filter, src, dst, j, VectorPolicy_F16{});
 	}
 
-	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j) const override
 	{
 		if (m_filter.width() >= 8)
 			resize_tile_fp_h_avx2<true>(m_filter, src, dst, j, VectorPolicy_F32{});
@@ -685,16 +687,16 @@ public:
 	ResizeImplV_AVX2(const EvaluatedFilter &filter) : ResizeImpl(filter, false)
 	{}
 
-	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
-		resize_tile_u16_v_avx2(m_filter, src, dst, i, (uint32_t *)tmp);
+		resize_tile_u16_v_avx2(m_filter, src, dst, i);
 	}
-	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
 		resize_tile_fp_v_avx2(m_filter, src, dst, i, VectorPolicy_F16{});
 	}
 
-	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j) const override
 	{
 		resize_tile_fp_v_avx2(m_filter, src, dst, i, VectorPolicy_F32{});
 	}

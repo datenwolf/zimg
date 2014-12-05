@@ -18,33 +18,22 @@ try :
 	throw ZimgOutOfMemory{};
 }
 
-size_t Resize::tmp_size(PixelType type, int width) const
-{
-	size_t size = 0;
-
-	// Need a line buffer to store cached accumulators.
-	if (!m_horizontal && type == PixelType::WORD)
-		size += (size_t)width * 4;
-
-	return size;
-}
-
 void Resize::dependent_rect(int dst_top, int dst_left, int dst_bottom, int dst_right, int *src_top, int *src_left, int *src_bottom, int *src_right) const
 {
 	m_impl->dependent_rect(dst_top, dst_left, dst_bottom, dst_right, src_top, src_left, src_bottom, src_right);
 }
 
-void Resize::process(const ImageTile<const void> &src, const ImageTile<void> &dst, int i, int j, void *tmp) const
+void Resize::process(const ImageTile<const void> &src, const ImageTile<void> &dst, int i, int j) const
 {
 	switch (src.descriptor()->format.type) {
 	case PixelType::WORD:
-		m_impl->process_u16(tile_cast<const uint16_t>(src), tile_cast<uint16_t>(dst), i, j, tmp);
+		m_impl->process_u16(tile_cast<const uint16_t>(src), tile_cast<uint16_t>(dst), i, j);
 		break;
 	case PixelType::HALF:
-		m_impl->process_f16(tile_cast<const uint16_t>(src), tile_cast<uint16_t>(dst), i, j, tmp);
+		m_impl->process_f16(tile_cast<const uint16_t>(src), tile_cast<uint16_t>(dst), i, j);
 		break;
 	case PixelType::FLOAT:
-		m_impl->process_f32(tile_cast<const float>(src), tile_cast<float>(dst), i, j, tmp);
+		m_impl->process_f32(tile_cast<const float>(src), tile_cast<float>(dst), i, j);
 		break;
 	default:
 		throw ZimgUnsupportedError{ "only WORD, HALF, and FLOAT are supported for resize" };

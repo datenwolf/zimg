@@ -241,9 +241,11 @@ void resize_tile_fp_h_sse2(const EvaluatedFilter &filter, const ImageTile<const 
 	}
 }
 
-void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int n, uint32_t *tmp)
+void resize_tile_u16_v_sse2(const EvaluatedFilter &filter, const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int n)
 {
 	__m128i INT16_MIN_EPI16 = _mm_set1_epi16(INT16_MIN);
+	__m128i tmp_m128i[TILE_WIDTH / 4];
+	uint32_t *tmp = (uint32_t *)tmp_m128i;
 
 	int filter_stride = filter.stride_i16();
 
@@ -462,7 +464,7 @@ public:
 	ResizeImplH_SSE2(const EvaluatedFilter &filter) : ResizeImpl(filter, true)
 	{}
 
-	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
 		if (m_filter.width() > 8)
 			resize_tile_u16_h_sse2<true>(m_filter, src, dst, j);
@@ -470,12 +472,12 @@ public:
 			resize_tile_u16_h_sse2<false>(m_filter, src, dst, j);
 	}
 
-	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in SSE2 impl" };
 	}
 
-	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j) const override
 	{
 		if (m_filter.width() > 4)
 			resize_tile_fp_h_sse2<true>(m_filter, src, dst, j);
@@ -489,17 +491,17 @@ public:
 	ResizeImplV_SSE2(const EvaluatedFilter &filter) : ResizeImpl(filter, false)
 	{}
 
-	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
+	void process_u16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
-		resize_tile_u16_v_sse2(m_filter, src, dst, i, (uint32_t *)tmp);
+		resize_tile_u16_v_sse2(m_filter, src, dst, i);
 	}
 
-	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j, void *tmp) const override
+	void process_f16(const ImageTile<const uint16_t> &src, const ImageTile<uint16_t> &dst, int i, int j) const override
 	{
 		throw ZimgUnsupportedError{ "f16 not supported in SSE2 impl" };
 	}
 
-	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j, void *tmp) const override
+	void process_f32(const ImageTile<const float> &src, const ImageTile<float> &dst, int i, int j) const override
 	{
 		resize_tile_fp_v_sse2(m_filter, src, dst, i);
 	}

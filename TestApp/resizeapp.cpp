@@ -103,31 +103,14 @@ void execute(const resize::Resize *resize_h, const resize::Resize *resize_v, con
 
 	int tmp_width = 0;
 	int tmp_height = 0;
-	size_t tmp_size;
 
-	if (skip_h && skip_v) {
-		tmp_size = 0;
-	} else if (skip_h && !skip_v) {
-		tmp_size = resize_v->tmp_size(type, in.width());
-	} else if (skip_v && !skip_h) {
-		tmp_size = resize_h->tmp_size(type, in.width());
-	} else {
-		if (hfirst) {
-			tmp_width = out.width();
-			tmp_height = in.height();
-
-			tmp_size = std::max(resize_h->tmp_size(type, in.width()), resize_v->tmp_size(type, tmp_width));
-		} else {
-			tmp_width = in.width();
-			tmp_height = out.height();
-
-			tmp_size = std::max(resize_v->tmp_size(type, in.width()), resize_h->tmp_size(type, tmp_width));
-		}
+	if (!skip_h && !skip_v) {
+		tmp_width = hfirst ? out.width() : in.width();
+		tmp_height = hfirst ? in.height() : out.height();
 	}
 
 	int tmp_stride = ceil_n(tmp_width + TILE_WIDTH, TILE_WIDTH);
 	auto tmp_frame = allocate_buffer((size_t)tmp_stride * ceil_n(tmp_height, TILE_HEIGHT), type);
-	auto tmp_buffer = allocate_buffer(tmp_size, type);
 
 	convert_frame(in, src, PixelType::BYTE, type, true, false);
 
@@ -149,7 +132,7 @@ void execute(const resize::Resize *resize_h, const resize::Resize *resize_v, con
 				for (int i = 0; i < dst.height(); i += TILE_HEIGHT) {
 					for (int j = 0; j < dst.width(); j += TILE_WIDTH) {
 						r->dependent_rect(i, j, i + TILE_HEIGHT, j + TILE_WIDTH, &top, &left, &bottom, &right);
-						r->process(src_tile.sub_tile(top, left), dst_tile.sub_tile(i, j), i, j, tmp_buffer.data());
+						r->process(src_tile.sub_tile(top, left), dst_tile.sub_tile(i, j), i, j);
 					}
 				}
 			} else {
@@ -161,13 +144,13 @@ void execute(const resize::Resize *resize_h, const resize::Resize *resize_v, con
 				for (int i = 0; i < tmp_height; i += TILE_HEIGHT) {
 					for (int j = 0; j < tmp_width; j += TILE_WIDTH) {
 						r1->dependent_rect(i, j, i + TILE_HEIGHT, j + TILE_WIDTH, &top, &left, &bottom, &right);
-						r1->process(src_tile.sub_tile(top, left), tmp_tile.sub_tile(i, j), i, j, tmp_buffer.data());
+						r1->process(src_tile.sub_tile(top, left), tmp_tile.sub_tile(i, j), i, j);
 					}
 				}
 				for (int i = 0; i < dst.height(); i += TILE_HEIGHT) {
 					for (int j = 0; j < dst.width(); j += TILE_WIDTH) {
 						r2->dependent_rect(i, j, i + TILE_HEIGHT, j + TILE_WIDTH, &top, &left, &bottom, &right);
-						r2->process(tmp_tile.sub_tile(top, left), dst_tile.sub_tile(i, j), i, j, tmp_buffer.data());
+						r2->process(tmp_tile.sub_tile(top, left), dst_tile.sub_tile(i, j), i, j);
 					}
 				}
 			}
