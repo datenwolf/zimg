@@ -1,7 +1,9 @@
 #include <atomic>
 #include <cassert>
 #include <cinttypes>
+#include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <utility>
 #include "Common/cpuinfo.h"
@@ -210,7 +212,7 @@ void handle_bad_alloc()
 int zimg_get_last_error(char *err_msg, size_t n)
 {
 	if (err_msg) {
-		strncpy(err_msg, g_last_error_msg, std::min(sizeof(g_last_error_msg), n));
+		std::strncpy(err_msg, g_last_error_msg, std::min(sizeof(g_last_error_msg), n));
 		err_msg[n - 1] = '\0';
 	}
 

@@ -141,7 +141,6 @@ void execute(const colorspace::ColorspaceConversion &conv, const Frame &in, Fram
 {
 	int width = in.width();
 	int height = in.height();
-	int pxsize = pixel_size(type);
 
 	Frame in_conv{ width, height, pixel_size(type), 3 };
 	Frame out_conv{ width, height, pixel_size(type), 3 };

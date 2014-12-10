@@ -12,7 +12,6 @@ namespace resize {;
 namespace {;
 
 struct ScalarPolicy_U16 {
-	typedef uint16_t data_type;
 	typedef int32_t num_type;
 
 	int32_t coeff(const EvaluatedFilter &filter, int row, int k)
@@ -39,7 +38,6 @@ struct ScalarPolicy_U16 {
 };
 
 struct ScalarPolicy_F32 {
-	typedef float data_type;
 	typedef float num_type;
 
 	float coeff(const EvaluatedFilter &filter, int row, int k)
@@ -55,7 +53,6 @@ struct ScalarPolicy_F32 {
 template <class T, class Policy>
 void resize_tile_h_scalar(const EvaluatedFilter &filter, const ImageTile<const T> &src, const ImageTile<T> &dst, int n, Policy policy)
 {
-	typedef typename Policy::data_type data_type;
 	typedef typename Policy::num_type num_type;
 
 	int left_base = filter.left()[n];
@@ -82,7 +79,6 @@ void resize_tile_h_scalar(const EvaluatedFilter &filter, const ImageTile<const T
 template <class T, class Policy>
 void resize_tile_v_scalar(const EvaluatedFilter &filter, const ImageTile<const T> &src, const ImageTile<T> &dst, int n, Policy policy)
 {
-	typedef typename Policy::data_type data_type;
 	typedef typename Policy::num_type num_type;
 
 	int top_base = filter.left()[n];
@@ -168,7 +164,7 @@ public:
 } // namespace
 
 
-ResizeImpl::ResizeImpl(const EvaluatedFilter &filter, bool horizontal) : m_filter{ filter }, m_horizontal{ horizontal }
+ResizeImpl::ResizeImpl(const EvaluatedFilter &filter, bool horizontal) : m_horizontal{ horizontal }, m_filter{ filter }
 {
 }
 

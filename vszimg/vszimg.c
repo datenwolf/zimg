@@ -786,6 +786,9 @@ static void VS_CC vs_resize_create(const VSMap *in, VSMap *out, void *userData, 
 		hfirst_uv = zimg_resize_horizontal_first((double)src_width_uv / width_uv, (double)src_height_uv / height_uv);
 		use_y_as_uv = 0;
 	} else {
+		skip_h_uv = 0;
+		skip_v_uv = 0;
+
 		hfirst_uv = 0;
 		use_y_as_uv = 1;
 	}
