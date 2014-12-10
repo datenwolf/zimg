@@ -33,7 +33,7 @@ libzimg_la_SOURCES = API/zimg.cpp \
 					 Common/matrix.h \
 					 Common/osdep.h \
 					 Common/pixel.h \
-					 Common/plane.h \
+					 Common/tile.h \
 					 Depth/depth_convert.cpp \
 					 Depth/depth_convert.h \
 					 Depth/depth.cpp \
