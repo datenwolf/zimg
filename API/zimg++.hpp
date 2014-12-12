@@ -32,14 +32,19 @@ public:
 		zimg_colorspace_delete(m_ctx);
 	}
 
-	size_t tmp_size(int width)
+	size_t tmp_size()
 	{
-		return zimg_colorspace_tmp_size(m_ctx, width);
+		return zimg_colorspace_tmp_size(m_ctx);
 	}
 
-	void process(const void * const src[3], void * const dst[3], void *tmp, int width, int height, const int src_stride[3], const int dst_stride[3], int pixel_type)
+	int pixel_supported(int pixel_type)
 	{
-		if (zimg_colorspace_process(m_ctx, src, dst, tmp, width, height, src_stride, dst_stride, pixel_type))
+		return zimg_colorspace_pixel_supported(m_ctx, pixel_type);
+	}
+
+	void process_tile(const zimg_image_tile_t src[3], const zimg_image_tile_t dst[3], void *tmp, int pixel_type)
+	{
+		if (zimg_colorspace_process_tile(m_ctx, src, dst, tmp, pixel_type))
 			throw ZimgError{};
 	}
 };
@@ -62,15 +67,19 @@ public:
 		zimg_depth_delete(m_ctx);
 	}
 
+	int tile_supported(int pixel_in, int pixel_out)
+	{
+		return zimg_depth_tile_supported(m_ctx, pixel_in, pixel_out);
+	}
+
 	size_t tmp_size(int width)
 	{
 		return zimg_depth_tmp_size(m_ctx, width);
 	}
 
-	void process(const void *src, void *dst, void *tmp, int width, int height, int src_stride, int dst_stride,
-	             int pixel_in, int pixel_out, int depth_in, int depth_out, int fullrange_in, int fullrange_out, int chroma)
+	void process(const zimg_image_tile_t *src, const zimg_image_tile_t *dst, void *tmp)
 	{
-		if (zimg_depth_process(m_ctx, src, dst, tmp, width, height, src_stride, dst_stride, pixel_in, pixel_out, depth_in, depth_out, fullrange_in, fullrange_out, chroma))
+		if (zimg_depth_process(m_ctx, src, dst, tmp))
 			throw ZimgError{};
 	}
 };
@@ -78,12 +87,10 @@ public:
 class ZimgResizeContext {
 	zimg_resize_context *m_ctx;
 public:
-	ZimgResizeContext(int filter_type, int src_width, int src_height, int dst_width, int dst_height,
-	                  double shift_w, double shift_h, double subwidth, double subheight,
-	                  double filter_param_a, double filter_param_b)
+	ZimgResizeContext(int filter_type, int horizontal, int src_dim, int dst_dim,
+	                  double shift, double width, double filter_param_a, double filter_param_b)
 	{
-		if (!(m_ctx = zimg_resize_create(filter_type, src_width, src_height, dst_width, dst_height,
-		                                 shift_w, shift_h, subwidth, subheight, filter_param_a, filter_param_b)))
+		if (!(m_ctx = zimg_resize_create(filter_type, horizontal, src_dim, dst_dim, shift, width, filter_param_a, filter_param_b)))
 			throw ZimgError{};
 	}
 
@@ -96,14 +103,20 @@ public:
 		zimg_resize_delete(m_ctx);
 	}
 
-	size_t tmp_size(int pixel_type)
+	int pixel_supported(int pixel_type)
 	{
-		return zimg_resize_tmp_size(m_ctx, pixel_type);
+		return zimg_resize_pixel_supported(m_ctx, pixel_type);
 	}
 
-	void process(const void *src, void *dst, void *tmp, int src_width, int src_height, int dst_width, int dst_height, int src_stride, int dst_stride, int pixel_type)
+	void dependent_rect(int dst_top, int dst_left, int dst_bottom, int dst_right,
+	                    int *src_top, int *src_left, int *src_bottom, int *src_right)
 	{
-		if (zimg_resize_process(m_ctx, src, dst, tmp, src_width, src_height, dst_width, dst_height, src_stride, dst_stride, pixel_type))
+		zimg_resize_dependent_rect(m_ctx, dst_top, dst_left, dst_bottom, dst_right, src_top, src_left, src_bottom, src_right);
+	}
+
+	void process_tile(const zimg_image_tile_t *src, const zimg_image_tile_t *dst)
+	{
+		if (zimg_resize_process_tile(m_ctx, src, dst))
 			throw ZimgError{};
 	}
 };
